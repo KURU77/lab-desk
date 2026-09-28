@@ -371,6 +371,18 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .fld input[readonly]{background:var(--sunken);font-family:var(--f-mono);font-weight:600;color:var(--ink)}
 .fld small.calc{color:var(--muted);font-family:var(--f-mono)}
 
+/* 使用済み */
+.qty .n.used{color:var(--muted);min-width:56px}
+.usedtag{color:var(--muted)}
+.userow{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-top:1px solid var(--line-soft);min-height:56px}
+.userow:first-child{border-top:0}
+.userow > button.main{flex:1;min-width:0;text-align:left}
+.userow.isused .t{color:var(--muted)}
+.usebtn{flex:none;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--ink);white-space:nowrap}
+.usebtn svg{width:14px;height:14px}
+.usebtn:hover{background:var(--card-2)}
+.usebtn.on{background:var(--pcb-soft);border-color:transparent;color:var(--pcb)}
+
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
@@ -466,7 +478,7 @@ var DS_STATUS = ['これから取得','取得済み','使用中','使用終了']
 var D_KINDS = ['設計図','回路図','配線図','ブロック図','スケッチ','完成イメージ','写真','資料'];
 
 var DB = load();
-var UI = { dProj:'すべて', dKind:'すべて', projFilter:'すべて', invQuery:'', invCat:'すべて', invLow:false, lastRoute:'' };
+var UI = { invView:'すべて', dProj:'すべて', dKind:'すべて', projFilter:'すべて', invQuery:'', invCat:'すべて', invLow:false, lastRoute:'' };
 
 function blank(){ return { v:1, projects:[], inventory:[], designs:[], deleted:{}, settings:{ theme:'auto' } }; }
 function load(){
@@ -808,7 +820,7 @@ function expenseForm(p, e){
       { k:'category', label:'区分', type:'select', options:EXP_CATS, def:'電子部品', w:'half' },
       { k:'shop', label:'購入先', list: shopList(), ph:'秋月電子、Amazon など' },
       { k:'note', label:'メモ', type:'textarea', rows:2 }
-    ].concat(isNew ? [{ k:'toInv', label:'部品・工具の台帳にも登録して、この研究の備品に加える', type:'check', def:false }] : []),
+    ].concat(isNew ? [{ k:'toInv', label:'部品・工具の台帳にも登録して、この研究の備品に加える', type:'check', def:true }] : []),
     mount: function(root, form){
       var u = form.elements.unitPrice, q = form.elements.qty, a = form.elements.amount;
       var hint = a.parentNode.querySelector('small'); hint.className = 'calc';
@@ -825,6 +837,14 @@ function expenseForm(p, e){
       }
       u.addEventListener('input', recalc); q.addEventListener('input', recalc);
       recalc();
+      /* 区分が部品・工具・材料なら台帳登録をオン、送料や書籍ならオフ（手で切り替えたらそれに従う） */
+      var ti = form.elements.toInv, cat = form.elements.category, touched = false;
+      if(ti){
+        var partLike = function(){ return ['電子部品','工具・計測器','材料・消耗品'].indexOf(cat.value) >= 0; };
+        ti.checked = partLike();
+        ti.addEventListener('change', function(){ touched = true; });
+        cat.addEventListener('change', function(){ if(!touched) ti.checked = partLike(); });
+      }
     },
     onSave: function(v){
       var toInv = v.toInv; delete v.toInv;
@@ -893,6 +913,12 @@ function logForm(p, l){
   });
 }
 
+function usedQty(it){
+  var n = 0;
+  DB.projects.forEach(function(p){ p.uses.forEach(function(u){ if(u.invId === it.id && u.used) n += (+u.qty || 1); }); });
+  return n;
+}
+function unusedQty(it){ return Math.max(0, (+it.qty || 0) - usedQty(it)); }
 function usesOf(invId){
   var out = [];
   DB.projects.forEach(function(p){ p.uses.forEach(function(u){ if(u.invId === invId) out.push({ p:p, u:u }); }); });
@@ -909,7 +935,7 @@ function invForm(it, preset, after){
       { k:'name', label:'名前', req:true, ph:'例：ESP32-DevKitC、はんだごて' },
       { k:'category', label:'分類', type:'select', options:INV_CATS, def:'その他', w:'half' },
       { k:'model', label:'型番・規格', ph:'例：BME280 / 10kΩ 1/4W', w:'half' },
-      { k:'qty', label:'数量', type:'number', def:1, w:'third' },
+      { k:'qty', label:'総数', type:'number', def:1, w:'third', hint:'使用済みを含む' },
       { k:'unit', label:'単位', def:'個', list:['個','本','枚','セット','m','袋','台','巻'], w:'third' },
       { k:'minQty', label:'これ以下で補充', type:'number', w:'third', hint:'空欄なら通知しない' },
       { k:'price', label:'単価（円）', type:'number', w:'half' },
@@ -930,8 +956,8 @@ function invForm(it, preset, after){
       pr.addEventListener('input', recalc); q.addEventListener('input', recalc);
       recalc();
     },
-    bottom: us.length ? '<div class="infobox"><b>使っている研究</b>' + us.map(function(x){
-      return '<div><a href="#/p/' + x.p.id + '/cost" data-act="closeSheet">' + esc(x.p.title) + '</a> <span class="muted mono small">× ' + esc(x.u.qty) + '</span></div>';
+    bottom: us.length ? '<div class="infobox"><b>未使用 ' + num(unusedQty(it)) + ' ・ 使用済み ' + num(usedQty(it)) + '（' + esc(it.unit || '個') + '）</b>' + us.map(function(x){
+      return '<div><a href="#/p/' + x.p.id + '/cost" data-act="closeSheet">' + esc(x.p.title) + '</a> <span class="muted mono small">× ' + esc(x.u.qty || 1) + ' ・ ' + (x.u.used ? '使用済み' + (x.u.usedDate ? ' ' + fmtShort(x.u.usedDate) : '') : '使う予定') + '</span></div>';
     }).join('') + '</div>' : '',
     onSave: function(v){
       var item;
@@ -959,13 +985,19 @@ function useForm(p, u){
   formSheet({
     title: it ? it.name : '備品',
     values: u,
-    top: it ? '<p class="muted small" style="margin:-8px 0 12px">' + esc(it.category) + (it.model ? ' ・ ' + esc(it.model) : '') + ' ・ 在庫 ' + esc(num(it.qty)) + esc(it.unit || '個') + (it.location ? ' ・ ' + esc(it.location) : '') + '</p>' : '',
+    top: it ? '<p class="muted small" style="margin:-8px 0 12px">' + esc(it.category) + (it.model ? ' ・ ' + esc(it.model) : '') + ' ・ 未使用 ' + esc(num(unusedQty(it))) + ' / 総数 ' + esc(num(it.qty)) + esc(it.unit || '個') + (it.location ? ' ・ ' + esc(it.location) : '') + '</p>' : '',
     fields: [
       { k:'qty', label:'この研究で使う数', type:'number', w:'half' },
-      { k:'note', label:'用途', w:'half', ph:'例：温湿度の計測' }
+      { k:'note', label:'用途', w:'half', ph:'例：温湿度の計測' },
+      { k:'used', label:'使用済み（部品リストで未使用から使用済みに移ります）', type:'check' },
+      { k:'usedDate', label:'使用した日', type:'date', w:'half' }
     ],
     bottom: it ? '<div class="btnrow" style="margin-top:12px"><button type="button" class="btn sm" data-act="invOpen" data-id="' + it.id + '">台帳の情報を開く</button></div>' : '',
-    onSave: function(v){ Object.assign(u, v); touch(p); save(); render(true); },
+    onSave: function(v){
+      if(v.used && !v.usedDate) v.usedDate = todayISO();
+      if(!v.used) v.usedDate = '';
+      Object.assign(u, v); touch(p); save(); render(true);
+    },
     onDelete: function(){ p.uses = p.uses.filter(function(x){ return x !== u; }); touch(p); save(); render(true); },
     delLabel: 'この研究から外す', delConfirm: 'この研究の備品から外しますか？（台帳からは消えません）'
   });
@@ -982,7 +1014,7 @@ function usePicker(p){
     if(!items.length) return '<div class="empty small">' + (DB.inventory.length ? '該当する部品がありません' : '台帳にまだ何も登録されていません') + '</div>';
     return '<div class="rows">' + items.map(function(i){
       return '<button type="button" class="row" data-act="usePick" data-id="' + i.id + '"><div class="main"><div class="t">' + esc(i.name) +
-        (i.model ? ' <span class="mono small muted">' + esc(i.model) + '</span>' : '') + '</div><div class="s">' + esc(i.category) + ' ・ 在庫 ' + esc(num(i.qty)) + esc(i.unit || '個') + (i.location ? ' ・ ' + esc(i.location) : '') + '</div></div></button>';
+        (i.model ? ' <span class="mono small muted">' + esc(i.model) + '</span>' : '') + '</div><div class="s">' + esc(i.category) + ' ・ 未使用 ' + esc(num(unusedQty(i))) + esc(i.unit || '個') + (i.location ? ' ・ ' + esc(i.location) : '') + '</div></div></button>';
     }).join('') + '</div>';
   }
   openSheet('<h2>備品を台帳から追加</h2>' +
@@ -2045,14 +2077,18 @@ function tabCost(p){
     h += '<div class="card empty">部品代・書籍代・交通費など、この研究にかかったお金を記録します。</div>';
   }
 
-  h += '<div class="sec"><h2>使っている備品</h2><span class="sp"></span><button class="btn sm pri" data-act="useNew">' + I.plus + '台帳から追加</button></div>';
+  var nUsedHere = p.uses.filter(function(u){ return u.used && getInv(u.invId); }).length, nUsesHere = p.uses.filter(function(u){ return getInv(u.invId); }).length;
+  h += '<div class="sec"><h2>使っている備品</h2>' + (nUsesHere ? '<span class="mono small faint">使用済み ' + nUsedHere + '/' + nUsesHere + '</span>' : '') + '<span class="sp"></span><button class="btn sm pri" data-act="useNew">' + I.plus + '台帳から追加</button></div>';
   if(p.uses.length){
-    h += '<div class="card rows">' + p.uses.map(function(u){
+    var ordered = p.uses.slice().sort(function(a, b){ return (a.used ? 1 : 0) - (b.used ? 1 : 0); });
+    h += '<div class="card rows">' + ordered.map(function(u){
       var it = getInv(u.invId);
       if(!it) return '';
-      return '<button class="row" data-act="useEdit" data-id="' + u.id + '"><div class="main"><div class="t">' + esc(it.name) +
-        (it.model ? ' <span class="mono small muted">' + esc(it.model) + '</span>' : '') + '</div><div class="s">' + esc(it.category) + (u.note ? ' ・ ' + esc(u.note) : '') + (it.location ? ' ・ ' + esc(it.location) : '') + '</div></div>' +
-        '<span class="mono" style="font-weight:600">×' + esc(u.qty || 1) + '</span></button>';
+      return '<div class="userow' + (u.used ? ' isused' : '') + '"><button class="main" data-act="useEdit" data-id="' + u.id + '"><div class="t">' + esc(it.name) +
+        (it.model ? ' <span class="mono small muted">' + esc(it.model) + '</span>' : '') + ' <span class="mono small" style="font-weight:600">×' + esc(u.qty || 1) + '</span></div><div class="s">' +
+        (u.used ? '使用済み' + (u.usedDate ? ' ' + fmtDate(u.usedDate) : '') : '未使用（手元に ' + num(unusedQty(it)) + esc(it.unit || '個') + '）') +
+        (u.note ? ' ・ ' + esc(u.note) : '') + (!u.used && it.location ? ' ・ ' + esc(it.location) : '') + '</div></button>' +
+        '<button class="usebtn' + (u.used ? ' on' : '') + '" data-act="useToggle" data-id="' + u.id + '">' + (u.used ? I.check + '使用済み' : '使用済みにする') + '</button></div>';
     }).join('') + '</div>';
   }else{
     h += '<div class="card empty">「部品・工具」の台帳から、この研究で使うものを選んで紐づけます。<br>費用の記録時に「台帳にも登録」を選ぶと自動で追加されます。</div>';
@@ -2101,12 +2137,14 @@ function tabPlan(p){
 }
 
 /* ---------- 部品・工具 ---------- */
-function isLow(i){ return i.minQty !== '' && i.minQty != null && +i.qty <= +i.minQty; }
+function isLow(i){ return i.minQty !== '' && i.minQty != null && unusedQty(i) <= +i.minQty; }
 function invFiltered(){
   var q = UI.invQuery.toLowerCase().split(/\s+/).filter(Boolean);
   return DB.inventory.filter(function(i){
     if(UI.invCat !== 'すべて' && i.category !== UI.invCat) return false;
     if(UI.invLow && !isLow(i)) return false;
+    if(UI.invView === '未使用' && unusedQty(i) <= 0) return false;
+    if(UI.invView === '使用済み' && usedQty(i) <= 0) return false;
     if(!q.length) return true;
     var hay = [i.name, i.model, i.category, i.location, i.shop, i.note].concat(i.tags || []).join(' ').toLowerCase();
     return q.every(function(w){ return hay.indexOf(w) >= 0; });
@@ -2115,16 +2153,29 @@ function invFiltered(){
 function invListHTML(){
   var items = invFiltered();
   if(!DB.inventory.length) return '<div class="card empty" style="margin-top:12px"><div class="big">台帳は空です</div>持っているマイコン・センサ・受動部品・工具・計測器などを、<br>研究で使うかどうかに関わらず登録しておけます。<div class="btnrow"><button class="btn pri" data-act="invNew">' + I.plus + '登録する</button></div></div>';
-  if(!items.length) return '<div class="card empty" style="margin-top:12px">条件に合うものがありません</div>';
+  if(!items.length) return '<div class="card empty" style="margin-top:12px">' + (UI.invView === '使用済み' && !UI.invQuery && UI.invCat === 'すべて' ? 'まだ使用済みの部品はありません。<br>研究ページの「費用・備品」で、備品の「使用済みにする」を押すとここに移ります。' : '条件に合うものがありません') + '</div>';
   var groups = {};
   items.forEach(function(i){ (groups[i.category || 'その他'] = groups[i.category || 'その他'] || []).push(i); });
   return INV_CATS.concat(Object.keys(groups).filter(function(c){ return INV_CATS.indexOf(c) < 0; })).filter(function(c){ return groups[c]; }).map(function(c){
     var g = groups[c].sort(function(a, b){ return a.name.localeCompare(b.name, 'ja'); });
     return '<div class="grp"><h3>' + esc(c) + ' <b>' + g.length + '</b></h3><div class="card rows">' + g.map(function(i){
-      var us = usesOf(i.id), low = isLow(i);
+      var us = usesOf(i.id), low = isLow(i), used = usedQty(i), unused = unusedQty(i), unit = esc(i.unit || '個');
+      var usedIn = us.filter(function(x){ return x.u.used; });
+      var planned = us.filter(function(x){ return !x.u.used; });
+      var line;
+      if(UI.invView === '使用済み'){
+        line = usedIn.map(function(x){ return esc(x.p.title.length > 18 ? x.p.title.slice(0, 18) + '…' : x.p.title) + ' ×' + esc(x.u.qty || 1) + (x.u.usedDate ? '（' + fmtShort(x.u.usedDate) + '）' : ''); }).join(' ・ ');
+      }else{
+        line = [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + unit + (+i.qty > 1 ? '（計 ' + yen(i.price * i.qty) + '）' : '') : '',
+          planned.length ? '研究' + planned.length + '件で使う予定' : '',
+          UI.invView === 'すべて' && used ? '<span class="usedtag">使用済み ' + num(used) + unit + '</span>' : '',
+          low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ');
+      }
+      var qtyCell = UI.invView === '使用済み'
+        ? '<div class="qty"><span class="n used">' + esc(num(used)) + '<small>使用済み</small></span></div>'
+        : '<div class="qty"><button data-act="qty" data-id="' + i.id + '" data-d="-1" aria-label="総数を減らす">' + I.minus + '</button><span class="n' + (low ? ' low' : '') + '">' + esc(num(unused)) + '<small>' + (used ? '未使用/' + esc(num(i.qty)) : unit) + '</small></span><button data-act="qty" data-id="' + i.id + '" data-d="1" aria-label="総数を増やす">' + I.plus + '</button></div>';
       return '<div class="row inv"><button class="main" style="text-align:left" data-act="invEdit" data-id="' + i.id + '"><div class="t">' + esc(i.name) + (i.model ? '<small>' + esc(i.model) + '</small>' : '') + '</div>' +
-        '<div class="s">' + [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + esc(i.unit || '個') + (+i.qty > 1 ? '（計 ' + yen(i.price * i.qty) + '）' : '') : '', us.length ? '研究' + us.length + '件で使用' : '', low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ') + '</div></button>' +
-        '<div class="qty"><button data-act="qty" data-id="' + i.id + '" data-d="-1" aria-label="減らす">' + I.minus + '</button><span class="n' + (low ? ' low' : '') + '">' + esc(num(i.qty)) + '<small>' + esc(i.unit || '個') + '</small></span><button data-act="qty" data-id="' + i.id + '" data-d="1" aria-label="増やす">' + I.plus + '</button></div></div>';
+        '<div class="s">' + line + '</div></button>' + qtyCell + '</div>';
     }).join('') + '</div></div>';
   }).join('');
 }
@@ -2133,9 +2184,13 @@ function viewInv(){
   var inv = DB.inventory;
   var value = inv.reduce(function(s, i){ return s + (+i.price || 0) * (+i.qty || 0); }, 0);
   var lows = inv.filter(isLow).length;
-  var tools = inv.filter(function(i){ return i.category === '工具' || i.category === '計測器'; }).length;
-  var h = '<div class="stats">' + stat('品目', inv.length) + stat('工具・計測器', tools) + stat('推定金額', yen(value)) + stat('補充したい', lows) + '</div>';
-  h += '<div style="height:14px"></div><div class="search">' + I.search + '<input type="search" id="invQ" placeholder="名前・型番・場所・タグで検索" value="' + esc(UI.invQuery) + '"></div>';
+  var nUnused = inv.filter(function(i){ return unusedQty(i) > 0; }).length;
+  var nUsed = inv.filter(function(i){ return usedQty(i) > 0; }).length;
+  var h = '<div class="stats">' + stat('未使用がある品目', nUnused) + stat('使用済みがある品目', nUsed) + stat('推定金額', yen(value)) + stat('補充したい', lows) + '</div>';
+  h += '<div class="seg" role="tablist" style="margin-top:14px">' + [['すべて', inv.length], ['未使用', nUnused], ['使用済み', nUsed]].map(function(v){
+    return '<a role="tab" href="javascript:void 0" data-act="invView" data-v="' + v[0] + '" class="' + (UI.invView === v[0] ? 'on' : '') + '">' + v[0] + '<b>' + v[1] + '</b></a>';
+  }).join('') + '</div>';
+  h += '<div style="height:10px"></div><div class="search">' + I.search + '<input type="search" id="invQ" placeholder="名前・型番・場所・タグで検索" value="' + esc(UI.invQuery) + '"></div>';
   var counts = {}; inv.forEach(function(i){ counts[i.category] = (counts[i.category] || 0) + 1; });
   h += '<div class="chips"><button class="chip' + (UI.invCat === 'すべて' ? ' on' : '') + '" data-act="invCat" data-v="すべて">すべて <b>' + inv.length + '</b></button>' +
     INV_CATS.filter(function(c){ return counts[c]; }).map(function(c){
@@ -2248,6 +2303,21 @@ var ACT = {
     var p = UI.pickFor; closeSheet();
     setTimeout(function(){ invForm(null, null, function(item){ p.uses.push({ id:uid(), invId:item.id, qty:item.qty || 1, note:'' }); touch(p); save(); }); }, 240);
   },
+  useToggle: function(el){
+    var p = UI.cur, u = p.uses.find(function(x){ return x.id === el.dataset.id; }), it = u && getInv(u.invId);
+    if(!it) return;
+    if(u.used){
+      if(!confirm('「' + it.name + '」を未使用に戻しますか？')) return;
+      u.used = false; u.usedDate = '';
+      touch(p); save(); render(true); toast('未使用に戻しました');
+      return;
+    }
+    var need = +u.qty || 1, left = unusedQty(it);
+    if(need > left && !confirm('部品リストの未使用は ' + left + (it.unit || '個') + ' ですが、' + need + (it.unit || '個') + ' を使用済みにします。よろしいですか？（台帳の総数が足りていない可能性があります）')) return;
+    u.used = true; u.usedDate = todayISO();
+    touch(p); save(); render(true);
+    toast('「' + it.name + '」×' + need + ' を使用済みにしました（部品リストの未使用 ' + unusedQty(it) + (it.unit || '個') + '）');
+  },
   useEdit: function(el){ useForm(UI.cur, UI.cur.uses.find(function(u){ return u.id === el.dataset.id; })); },
   invOpen: function(el){ var it = getInv(el.dataset.id); closeSheet(); setTimeout(function(){ invForm(it); }, 240); },
   msNew: function(){ milestoneForm(UI.cur, null); },
@@ -2270,6 +2340,7 @@ var ACT = {
   invNew: function(){ invForm(null, UI.invCat !== 'すべて' ? { category:UI.invCat } : null); },
   invEdit: function(el){ invForm(getInv(el.dataset.id)); },
   invCat: function(el){ UI.invCat = el.dataset.v; render(true); },
+  invView: function(el){ UI.invView = el.dataset.v; render(true); },
   qty: function(el){
     var it = getInv(el.dataset.id);
     it.qty = Math.max(0, (+it.qty || 0) + (+el.dataset.d)); save();
@@ -2316,9 +2387,9 @@ var ACT = {
     download('lab-desk-expenses-' + todayISO() + '.csv', csv(rows), 'text/csv');
   },
   invCsv: function(){
-    var rows = [['名前','分類','型番・規格','数量','単位','補充ライン','保管場所','単価','購入日','購入先','URL','タグ','メモ','使っている研究']];
+    var rows = [['名前','分類','型番・規格','総数','未使用','使用済み','単位','補充ライン','保管場所','単価','購入日','購入先','URL','タグ','メモ','使っている研究']];
     DB.inventory.forEach(function(i){
-      rows.push([i.name, i.category, i.model, i.qty, i.unit, i.minQty, i.location, i.price, i.purchased, i.shop, i.url, (i.tags || []).join(' '), i.note,
+      rows.push([i.name, i.category, i.model, i.qty, unusedQty(i), usedQty(i), i.unit, i.minQty, i.location, i.price, i.purchased, i.shop, i.url, (i.tags || []).join(' '), i.note,
         usesOf(i.id).map(function(x){ return x.p.title; }).join(' / ')]);
     });
     if(rows.length === 1) return toast('台帳がまだ空です');
@@ -2463,11 +2534,11 @@ function addSample(){
       { id:uid(), date:addDays(-12), name:'ケース用アクリル板', category:'材料・消耗品', unitPrice:380, qty:2, amount:760, shop:'ホームセンター' }
     ],
     uses:[
-      { id:uid(), invId:esp.id, qty:1, note:'計測・送信' },
+      { id:uid(), invId:esp.id, qty:1, note:'計測・送信', used:true, usedDate:addDays(-18) },
       { id:uid(), invId:scd.id, qty:1, note:'CO₂ 計測' },
       { id:uid(), invId:bme.id, qty:1, note:'温湿度の補正用' },
       { id:uid(), invId:oled.id, qty:1, note:'その場で表示' },
-      { id:uid(), invId:bb.id, qty:1, note:'試作' }
+      { id:uid(), invId:bb.id, qty:1, note:'試作', used:true, usedDate:addDays(-18) }
     ],
     milestones:[
       { id:uid(), title:'部品を選んで購入する', due:addDays(-38), done:true, doneDate:addDays(-38) },
