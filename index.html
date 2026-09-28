@@ -367,6 +367,10 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .iconbtn.sync.offline{color:var(--faint)}
 @keyframes pulse{50%{opacity:.35}}
 
+/* 自動計算された金額の欄 */
+.fld input[readonly]{background:var(--sunken);font-family:var(--f-mono);font-weight:600;color:var(--ink)}
+.fld small.calc{color:var(--muted);font-family:var(--f-mono)}
+
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
@@ -602,7 +606,7 @@ function fieldHTML(f, v){
     if(f.type === 'tags' && Array.isArray(val)) val = val.join(', ');
     var extra = type === 'number' ? ' inputmode="decimal" step="any"' : '';
     if(f.list) extra += ' list="dl_' + f.k + '"';
-    inp = '<input type="' + type + '" id="' + id + '" name="' + f.k + '" value="' + esc(val) + '"' + ph + extra + (f.req ? ' required' : '') + '>';
+    inp = '<input type="' + type + '" id="' + id + '" name="' + f.k + '" value="' + esc(val) + '"' + ph + extra + (f.req ? ' required' : '') + (f.ro ? ' readonly tabindex="-1"' : '') + '>';
     if(f.list) inp += '<datalist id="dl_' + f.k + '">' + f.list.map(function(o){ return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
   }
   return '<label class="fld' + (f.w ? ' ' + f.w : '') + '"><span>' + esc(f.label) + (f.req ? ' *' : '') + '</span>' + inp + (f.hint ? '<small>' + esc(f.hint) + '</small>' : '') + '</label>';
@@ -627,7 +631,7 @@ function formSheet(opts){
       var out = {};
       opts.fields.forEach(function(f){
         var el = form.elements[f.k];
-        if(!el) return;
+        if(!el || f.skip) return;
         if(f.type === 'check') out[f.k] = el.checked;
         else if(f.type === 'number') out[f.k] = el.value === '' ? '' : +el.value;
         else if(f.type === 'tags') out[f.k] = splitTags(el.value);
@@ -797,13 +801,31 @@ function expenseForm(p, e){
     values: e,
     fields: [
       { k:'name', label:'品名・内容', req:true, ph:'例：CO₂センサーモジュール SCD41' },
-      { k:'amount', label:'金額（合計・円）', type:'number', req:true, w:'half' },
-      { k:'qty', label:'数量', type:'number', def:1, w:'half' },
+      { k:'unitPrice', label:'単価（円）', type:'number', w:'third', ph:'1個の値段' },
+      { k:'qty', label:'数量', type:'number', def:1, w:'third' },
+      { k:'amount', label:'合計（円）', type:'number', req:true, w:'third', hint:' ' },
       { k:'date', label:'日付', type:'date', def:todayISO(), w:'half' },
       { k:'category', label:'区分', type:'select', options:EXP_CATS, def:'電子部品', w:'half' },
       { k:'shop', label:'購入先', list: shopList(), ph:'秋月電子、Amazon など' },
       { k:'note', label:'メモ', type:'textarea', rows:2 }
     ].concat(isNew ? [{ k:'toInv', label:'部品・工具の台帳にも登録して、この研究の備品に加える', type:'check', def:false }] : []),
+    mount: function(root, form){
+      var u = form.elements.unitPrice, q = form.elements.qty, a = form.elements.amount;
+      var hint = a.parentNode.querySelector('small'); hint.className = 'calc';
+      function recalc(){
+        if(u.value !== ''){
+          var qty = q.value === '' ? 1 : +q.value;
+          a.value = Math.round(+u.value * qty);
+          a.readOnly = true;
+          hint.textContent = yen(u.value) + ' × ' + num(qty) + ' = ' + yen(a.value);
+        }else{
+          a.readOnly = false;
+          hint.textContent = '単価が空なら合計を直接入力';
+        }
+      }
+      u.addEventListener('input', recalc); q.addEventListener('input', recalc);
+      recalc();
+    },
     onSave: function(v){
       var toInv = v.toInv; delete v.toInv;
       if(isNew){ v.id = uid(); p.expenses.push(v); e = v; }
@@ -813,7 +835,7 @@ function expenseForm(p, e){
         var saved = e;
         setTimeout(function(){
           invForm(null, {
-            name: saved.name, qty: saved.qty || 1, price: saved.qty ? Math.round(saved.amount / saved.qty) : saved.amount,
+            name: saved.name, qty: saved.qty || 1, price: saved.unitPrice !== '' && saved.unitPrice != null ? saved.unitPrice : (saved.qty ? Math.round(saved.amount / saved.qty) : saved.amount),
             purchased: saved.date, shop: saved.shop, category: saved.category === '工具・計測器' ? '工具' : saved.category === '材料・消耗品' ? '材料・消耗品' : 'その他'
           }, function(item){
             saved.invId = item.id;
@@ -826,6 +848,7 @@ function expenseForm(p, e){
     onDelete: isNew ? null : function(){ p.expenses = p.expenses.filter(function(x){ return x !== e; }); touch(p); save(); render(true); }
   });
 }
+function hasUnit(e){ return e.unitPrice !== '' && e.unitPrice != null; }
 function shopList(){
   var s = {};
   DB.projects.forEach(function(p){ p.expenses.forEach(function(e){ if(e.shop) s[e.shop] = 1; }); });
@@ -889,14 +912,24 @@ function invForm(it, preset, after){
       { k:'qty', label:'数量', type:'number', def:1, w:'third' },
       { k:'unit', label:'単位', def:'個', list:['個','本','枚','セット','m','袋','台','巻'], w:'third' },
       { k:'minQty', label:'これ以下で補充', type:'number', w:'third', hint:'空欄なら通知しない' },
-      { k:'location', label:'保管場所', list: locList(), ph:'例：引き出し A-2', w:'half' },
       { k:'price', label:'単価（円）', type:'number', w:'half' },
+      { k:'invTotal', label:'合計（単価 × 数量）', w:'half', ro:true, skip:true },
+      { k:'location', label:'保管場所', list: locList(), ph:'例：引き出し A-2', w:'half' },
       { k:'purchased', label:'購入日', type:'date', w:'half' },
-      { k:'shop', label:'購入先', list: shopList(), w:'half' },
+      { k:'shop', label:'購入先', list: shopList() },
       { k:'url', label:'商品ページ・データシート URL', type:'url' },
       { k:'tags', label:'タグ', type:'tags', ph:'I2C, 3.3V など' },
       { k:'note', label:'メモ', type:'textarea', rows:2, ph:'ピン配置の注意、動作確認済み など' }
     ],
+    mount: function(root, form){
+      var pr = form.elements.price, q = form.elements.qty, t = form.elements.invTotal;
+      function recalc(){
+        t.value = pr.value === '' ? '' : yen(Math.round(+pr.value * (q.value === '' ? 0 : +q.value)));
+        t.placeholder = '単価を入れると計算';
+      }
+      pr.addEventListener('input', recalc); q.addEventListener('input', recalc);
+      recalc();
+    },
     bottom: us.length ? '<div class="infobox"><b>使っている研究</b>' + us.map(function(x){
       return '<div><a href="#/p/' + x.p.id + '/cost" data-act="closeSheet">' + esc(x.p.title) + '</a> <span class="muted mono small">× ' + esc(x.u.qty) + '</span></div>';
     }).join('') + '</div>' : '',
@@ -2005,7 +2038,8 @@ function tabCost(p){
       }).join('') + '</div>' +
       '<div class="rows" style="border-top:1px solid var(--line-soft)">' + exps.map(function(e){
         return '<button class="row" data-act="expEdit" data-id="' + e.id + '"><span class="date">' + fmtDate(e.date) + '</span><div class="main"><div class="t">' + esc(e.name) +
-          (e.qty && e.qty != 1 ? ' <span class="mono small muted">×' + esc(e.qty) + '</span>' : '') + '</div><div class="s">' + esc(e.category || '') + (e.shop ? ' ・ ' + esc(e.shop) : '') + (e.invId && getInv(e.invId) ? ' ・ 台帳に登録済み' : '') + '</div></div><span class="amt">' + yen(e.amount) + '</span></button>';
+          (!hasUnit(e) && e.qty && e.qty != 1 ? ' <span class="mono small muted">×' + esc(e.qty) + '</span>' : '') + '</div><div class="s">' +
+          (hasUnit(e) ? '<span class="mono">' + yen(e.unitPrice) + ' × ' + num(e.qty || 1) + '</span> ・ ' : '') + esc(e.category || '') + (e.shop ? ' ・ ' + esc(e.shop) : '') + (e.invId && getInv(e.invId) ? ' ・ 台帳に登録済み' : '') + '</div></div><span class="amt">' + yen(e.amount) + '</span></button>';
       }).join('') + '</div></div>';
   }else{
     h += '<div class="card empty">部品代・書籍代・交通費など、この研究にかかったお金を記録します。</div>';
@@ -2089,7 +2123,7 @@ function invListHTML(){
     return '<div class="grp"><h3>' + esc(c) + ' <b>' + g.length + '</b></h3><div class="card rows">' + g.map(function(i){
       var us = usesOf(i.id), low = isLow(i);
       return '<div class="row inv"><button class="main" style="text-align:left" data-act="invEdit" data-id="' + i.id + '"><div class="t">' + esc(i.name) + (i.model ? '<small>' + esc(i.model) + '</small>' : '') + '</div>' +
-        '<div class="s">' + [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + esc(i.unit || '個') : '', us.length ? '研究' + us.length + '件で使用' : '', low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ') + '</div></button>' +
+        '<div class="s">' + [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + esc(i.unit || '個') + (+i.qty > 1 ? '（計 ' + yen(i.price * i.qty) + '）' : '') : '', us.length ? '研究' + us.length + '件で使用' : '', low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ') + '</div></button>' +
         '<div class="qty"><button data-act="qty" data-id="' + i.id + '" data-d="-1" aria-label="減らす">' + I.minus + '</button><span class="n' + (low ? ' low' : '') + '">' + esc(num(i.qty)) + '<small>' + esc(i.unit || '個') + '</small></span><button data-act="qty" data-id="' + i.id + '" data-d="1" aria-label="増やす">' + I.plus + '</button></div></div>';
     }).join('') + '</div></div>';
   }).join('');
@@ -2276,8 +2310,8 @@ var ACT = {
   dKind: function(el){ UI.dKind = el.dataset.v; render(true); },
   importJson: function(){ $('#importFile').click(); },
   expCsv: function(){
-    var rows = [['研究','日付','品名・内容','区分','数量','金額','購入先','メモ']];
-    DB.projects.forEach(function(p){ p.expenses.forEach(function(e){ rows.push([p.title, e.date, e.name, e.category, e.qty, e.amount, e.shop, e.note]); }); });
+    var rows = [['研究','日付','品名・内容','区分','単価','数量','金額','購入先','メモ']];
+    DB.projects.forEach(function(p){ p.expenses.forEach(function(e){ rows.push([p.title, e.date, e.name, e.category, hasUnit(e) ? e.unitPrice : '', e.qty, e.amount, e.shop, e.note]); }); });
     if(rows.length === 1) return toast('費用の記録がまだありません');
     download('lab-desk-expenses-' + todayISO() + '.csv', csv(rows), 'text/csv');
   },
@@ -2422,11 +2456,11 @@ function addSample(){
         format:'CSV', location:'スプレッドシート「CO2ログ」', usage:'1週間の連続計測で集める本研究のメインデータ。', note:'センサーの自動校正が効くまで最初の 1 日は除外する。' }
     ],
     expenses:[
-      { id:uid(), date:addDays(-40), name:'ESP32-DevKitC', category:'電子部品', qty:2, amount:2960, shop:'秋月電子通商', invId:esp.id },
-      { id:uid(), date:addDays(-38), name:'CO₂センサーモジュール SCD41', category:'電子部品', qty:1, amount:5980, shop:'スイッチサイエンス', invId:scd.id },
+      { id:uid(), date:addDays(-40), name:'ESP32-DevKitC', category:'電子部品', unitPrice:1480, qty:2, amount:2960, shop:'秋月電子通商', invId:esp.id },
+      { id:uid(), date:addDays(-38), name:'CO₂センサーモジュール SCD41', category:'電子部品', unitPrice:5980, qty:1, amount:5980, shop:'スイッチサイエンス', invId:scd.id },
       { id:uid(), date:addDays(-38), name:'送料', category:'交通・発送', qty:1, amount:550, shop:'スイッチサイエンス' },
-      { id:uid(), date:addDays(-30), name:'Arduino で始める IoT 入門（書籍）', category:'書籍・文献', qty:1, amount:2640, shop:'書店' },
-      { id:uid(), date:addDays(-12), name:'ケース用アクリル板', category:'材料・消耗品', qty:2, amount:760, shop:'ホームセンター' }
+      { id:uid(), date:addDays(-30), name:'Arduino で始める IoT 入門（書籍）', category:'書籍・文献', unitPrice:2640, qty:1, amount:2640, shop:'書店' },
+      { id:uid(), date:addDays(-12), name:'ケース用アクリル板', category:'材料・消耗品', unitPrice:380, qty:2, amount:760, shop:'ホームセンター' }
     ],
     uses:[
       { id:uid(), invId:esp.id, qty:1, note:'計測・送信' },
