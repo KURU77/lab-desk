@@ -74,7 +74,7 @@
 }
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;touch-action:manipulation}
 html,body{margin:0;padding:0}
 body{
   background-color:var(--bg); color:var(--ink);
@@ -252,7 +252,8 @@ button.row{width:100%;text-align:left}
 .ref .t{font-weight:600}
 .ref .s i{font-style:normal;color:var(--ink)}
 .ref .note{margin-top:5px;font-size:13px;padding-left:10px;border-left:2px solid var(--acc-soft);color:var(--muted);white-space:pre-wrap}
-.ref .links{display:flex;gap:10px;margin-top:4px;font-size:12.5px}
+.ref .links{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;font-size:12.5px;overflow-wrap:anywhere}
+.ref .links a{white-space:nowrap}
 
 .total{display:flex;align-items:baseline;gap:10px;padding:16px}
 .total .v{font-family:var(--f-mono);font-size:28px;font-weight:600;letter-spacing:-.02em}
@@ -344,6 +345,10 @@ button.row{width:100%;text-align:left}
 .skwrap canvas{position:absolute;inset:0;width:100%;height:100%}
 #skPrev{touch-action:none;cursor:crosshair}
 
+/* iOS Safari は 16px 未満の入力欄にフォーカスすると画面を拡大するので、入力欄はすべて 16px 以上 */
+input,select,textarea{font-size:16px!important}
+.paste textarea{font-size:15px}
+
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
@@ -434,6 +439,7 @@ var STATUSES = ['進行中','計画中','中断','完了'];
 var EXP_CATS = ['電子部品','工具・計測器','材料・消耗品','書籍・文献','ソフト・サービス','交通・発送','その他'];
 var INV_CATS = ['マイコン・ボード','センサ','表示・LED','モーター・駆動','電源・電池','受動部品','半導体・IC','通信モジュール','コネクタ・配線','基板・ブレッドボード','工具','計測器','材料・消耗品','その他'];
 var REF_STATUS = ['未読','読んだ','精読済み','引用予定'];
+var DS_STATUS = ['これから取得','取得済み','使用中','使用終了'];
 var D_KINDS = ['設計図','回路図','配線図','ブロック図','スケッチ','完成イメージ','写真','資料'];
 
 var DB = load();
@@ -452,7 +458,7 @@ function normalize(d){
   d.inventory = Array.isArray(d.inventory) ? d.inventory : [];
   d.settings = d.settings || { theme:'auto' };
   d.projects.forEach(function(p){
-    ['refs','expenses','uses','milestones','logs','tags'].forEach(function(k){ if(!Array.isArray(p[k])) p[k] = []; });
+    ['refs','datasets','expenses','uses','milestones','logs','tags'].forEach(function(k){ if(!Array.isArray(p[k])) p[k] = []; });
     if(!p.status) p.status = '計画中';
     if(!p.progressMode) p.progressMode = 'auto';
   });
@@ -1420,7 +1426,7 @@ function projCard(p){
     '<div class="hd"><h3>' + esc(p.title) + '</h3><span class="pill st-' + esc(p.status) + '">' + esc(p.status) + '</span></div>' +
     (p.summary ? '<div class="sum">' + esc(p.summary) + '</div>' : '<div style="height:10px"></div>') +
     '<div class="pr"><div class="bar' + (pr >= 100 ? ' done' : '') + '"><i style="width:' + pr + '%"></i></div><span class="n">' + pr + '%</span></div>' +
-    '<div class="meta"><span>' + I.book + p.refs.length + '</span><span>' + I.yen + yen(projCost(p)) + '</span><span>' + I.chip + p.uses.length + '</span>' +
+    '<div class="meta"><span>' + I.book + (p.refs.length + p.datasets.length) + '</span><span>' + I.yen + yen(projCost(p)) + '</span><span>' + I.chip + p.uses.length + '</span>' +
     (nx ? '<span class="next">' + I.flag + esc(nx.title) + ' <span class="due ' + dl.c + '">' + esc(dl.t) + '</span></span>' : '') +
     (p.targetDate ? '<span>締切 ' + fmtDate(p.targetDate) + '</span>' : '') + '</div></a>';
 }
@@ -1465,13 +1471,13 @@ function viewPlan(){
   return h;
 }
 
-var PTABS = [['overview','概要'],['refs','先行研究'],['design','設計図'],['cost','費用・備品'],['progress','進捗'],['plan','予定']];
+var PTABS = [['overview','概要'],['refs','出典'],['design','設計図'],['cost','費用・備品'],['progress','進捗'],['plan','予定']];
 
 function viewProject(p, tab){
   topbar('<a class="iconbtn" href="#/" aria-label="戻る">' + I.back + '</a><h1>' + esc(p.title) + '</h1>' +
     '<button class="iconbtn" data-act="projEdit" aria-label="編集">' + I.edit + '</button>');
   var pr = projProgress(p);
-  var cnt = { design:DB.designs.filter(function(d){ return d.projectId === p.id; }).length, refs:p.refs.length, cost:p.expenses.length + p.uses.length, progress:p.logs.length, plan:p.milestones.length };
+  var cnt = { design:DB.designs.filter(function(d){ return d.projectId === p.id; }).length, refs:p.refs.length + p.datasets.length, cost:p.expenses.length + p.uses.length, progress:p.logs.length, plan:p.milestones.length };
   var h = '<div class="card phead"><div class="st"><span class="pill st-' + esc(p.status) + '">' + esc(p.status) + '</span>' +
     (p.startDate || p.targetDate ? '<span class="mono small muted">' + (p.startDate ? fmtDate(p.startDate) : '') + ' → ' + (p.targetDate ? fmtDate(p.targetDate) : '未定') + '</span>' : '') +
     (p.targetDate && p.status !== '完了' ? (function(){ var n = daysUntil(p.targetDate); return '<span class="pill plain ' + (n < 0 ? 'bad' : n <= 14 ? 'warn' : '') + '">' + (n < 0 ? (-n) + '日超過' : '締切まで' + n + '日') + '</span>'; })() : '') +
@@ -1493,7 +1499,7 @@ function tabOverview(p){
   var nx = nextMilestone(p);
   var lastLog = p.logs.slice().sort(function(a, b){ return (b.date || '') > (a.date || '') ? 1 : -1; })[0];
   h += '<div class="sec"><h2>ひと目で</h2></div><div class="stats">' +
-    stat('先行研究', p.refs.length, '件') + stat('費用', yen(projCost(p))) + stat('備品', p.uses.length, '点') +
+    stat('文献・データ', p.refs.length + p.datasets.length, '件') + stat('費用', yen(projCost(p))) + stat('備品', p.uses.length, '点') +
     stat('予定', p.milestones.filter(function(m){ return m.done; }).length + '/' + p.milestones.length, '完了') + '</div>';
   if(nx) h += '<div class="sec"><h2>次にやること</h2></div><div class="card rows">' + msRow({ p:p, m:nx }, false) + '</div>';
   if(lastLog) h += '<div class="sec"><h2>最新の記録</h2><span class="sp"></span><a class="lnk" href="#/p/' + p.id + '/progress">記録をすべて見る</a></div>' +
@@ -1502,6 +1508,117 @@ function tabOverview(p){
 }
 
 function tabRefs(p){
+  return tabPapers(p) + tabDatasets(p);
+}
+
+function tabDatasets(p){
+  var h = '<div class="sec"><h2>データセット</h2><span class="sp"></span>' +
+    (p.datasets.length ? '<button class="btn sm ghost" data-act="dsCopy">' + I.copy + '一覧をコピー</button>' : '') +
+    '<button class="btn sm pri" data-act="dsNew">' + I.plus + '追加</button></div>';
+  if(!p.datasets.length) return h + '<div class="card empty">研究に使う公開データ・計測データ・他の人から借りたデータなどを、<br>提供元・版・ライセンス・取得日つきで記録しておけます。<div class="btnrow"><button class="btn pri" data-act="dsNew">' + I.plus + 'データセットを追加</button></div></div>';
+  var cls = { 'これから取得':'warn', '取得済み':'', '使用中':'ok', '使用終了':'' };
+  return h + '<div class="card rows">' + p.datasets.map(function(d){
+    var link = d.doi ? 'https://doi.org/' + d.doi : d.url;
+    var meta = [d.version ? '版 ' + esc(d.version) : '', d.license ? esc(d.license) : '', d.accessed ? '取得 ' + fmtDate(d.accessed) : '', d.format ? esc(d.format) : '', d.size ? esc(d.size) : ''].filter(Boolean);
+    return '<div class="row ref" style="align-items:flex-start"><div class="main">' +
+      '<button style="text-align:left" data-act="dsEdit" data-id="' + d.id + '"><div class="t">' + esc(d.name) + '</div></button>' +
+      '<div class="s">' + esc(d.provider || '提供元不明') + (d.year ? ' <span class="mono">(' + esc(d.year) + ')</span>' : '') + '</div>' +
+      (meta.length ? '<div class="s">' + meta.join(' ・ ') + '</div>' : '') +
+      (link && /^https?:\/\//.test(link) ? '<div class="links"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + (d.doi ? 'doi:' + esc(d.doi) : '開く ↗') + '</a>' + (d.location ? '<span class="muted">保存先：' + esc(d.location) + '</span>' : '') + '</div>'
+        : (d.location ? '<div class="links"><span class="muted">保存先：' + esc(d.location) + '</span></div>' : '')) +
+      (d.usage ? '<div class="note">' + esc(d.usage) + '</div>' : '') +
+      '</div><span class="pill ' + (cls[d.status] || '') + '">' + esc(d.status || '取得済み') + '</span></div>';
+  }).join('') + '</div>';
+}
+
+function datasetForm(p, d){
+  var isNew = !d;
+  formSheet({
+    title: isNew ? 'データセットを追加' : 'データセットを編集',
+    values: d,
+    top: '<div class="paste"><textarea id="pasteRef" placeholder="DOI・データのページの URL・BibTeX を貼り付け"></textarea>' +
+      '<div class="btnrow"><button type="button" class="btn sm" id="pasteGo">読み取る</button><span class="hint" style="align-self:center">DOI（Zenodo・Figshare・Dryad なども可）があれば書誌を取得します</span></div></div>',
+    fields: [
+      { k:'name', label:'データセット名', req:true, type:'textarea', rows:2, ph:'例：過去の気象データ（東京・1時間値）' },
+      { k:'provider', label:'提供元・作成者', ph:'機関名や作成者', w:'half' },
+      { k:'year', label:'公開年', w:'half', ph:'2024' },
+      { k:'version', label:'版・バージョン', w:'half', ph:'v2.1、2024年版 など' },
+      { k:'status', label:'状態', type:'select', options:DS_STATUS, def:'取得済み', w:'half' },
+      { k:'doi', label:'DOI', w:'half', ph:'10.5281/zenodo.xxxxx' },
+      { k:'url', label:'URL', type:'url', w:'half' },
+      { k:'license', label:'ライセンス・利用条件', w:'half', list:['CC BY 4.0','CC BY-SA 4.0','CC BY-NC 4.0','CC0 1.0','ODbL','政府標準利用規約','研究目的のみ','要申請','不明'] },
+      { k:'accessed', label:'取得日（参照日）', type:'date', def:todayISO(), w:'half' },
+      { k:'format', label:'形式', w:'half', list:['CSV','JSON','Excel','NetCDF','HDF5','画像','音声','動画','SQL','その他'] },
+      { k:'size', label:'規模', w:'half', ph:'12,000 行、3.2GB など' },
+      { k:'location', label:'手元の保存先', ph:'例：Google Drive/研究/data/jma_2024.csv' },
+      { k:'usage', label:'この研究での使い方', type:'textarea', rows:2, ph:'何と比較するか、どの列を使うか など' },
+      { k:'citation', label:'指定の引用表記', type:'textarea', rows:2, hint:'提供元が引用の書き方を指定している場合はそのまま貼っておく（一覧のコピーでこちらが優先されます）' },
+      { k:'note', label:'メモ', type:'textarea', rows:2, ph:'前処理、欠損、注意点 など' }
+    ],
+    mount: function(root, form){
+      $('#pasteGo', root).addEventListener('click', function(){
+        var text = $('#pasteRef', root).value;
+        if(!text.trim()) return;
+        var got = parseRef(text), m;
+        if(!got.doi && (m = text.match(/zenodo\.org\/(?:records?|deposit)\/(\d+)/i))) got.doi = '10.5281/zenodo.' + m[1];
+        var out = { name:got.title, provider:got.authors || got.venue, year:got.year, doi:got.doi, url:got.url };
+        fill(out);
+        if(got.doi && !got.title){
+          toast('書誌を問い合わせ中…');
+          fetchCSL(got.doi).then(function(c){ fill(c); toast('書誌を取得しました'); })
+            .catch(function(){ toast('取得できませんでした（DOI とオンライン状態を確認）'); });
+        }else if(out.name || out.url || out.doi){ toast('読み取りました'); }
+        else toast('読み取れる情報が見つかりませんでした');
+      });
+      function fill(o){
+        Object.keys(o).forEach(function(k){ if(o[k] && form.elements[k]) form.elements[k].value = o[k]; });
+      }
+    },
+    onSave: function(v){
+      if(isNew){ v.id = uid(); p.datasets.push(v); }
+      else Object.assign(d, v);
+      touch(p); save(); render(true);
+    },
+    onDelete: isNew ? null : function(){ p.datasets = p.datasets.filter(function(x){ return x !== d; }); touch(p); save(); render(true); }
+  });
+}
+
+/* doi.org の CSL-JSON。CrossRef の DOI も DataCite（Zenodo など）の DOI も同じ形で返る */
+function fetchCSL(doi){
+  return fetch('https://doi.org/' + encodeURI(doi), { headers:{ Accept:'application/vnd.citationstyles.csl+json' } })
+    .then(function(res){ if(!res.ok) throw new Error(res.status); return res.json(); })
+    .then(function(m){
+      var cjk = /[\u3040-\u30ff\u3400-\u9fff]/;
+      var au = (m.author || []).map(function(a){
+        if(a.literal) return a.literal;
+        var g = a.given || '', f = a.family || '';
+        return cjk.test(f + g) ? f + g : (g + ' ' + f).trim();
+      }).join(', ');
+      var y = (m.issued && m.issued['date-parts'] && m.issued['date-parts'][0] && m.issued['date-parts'][0][0]) || '';
+      return {
+        name: Array.isArray(m.title) ? m.title[0] : (m.title || ''),
+        provider: au || m.publisher || '',
+        year: y ? String(y) : '',
+        version: m.version || '',
+        doi: m.DOI || doi,
+        url: m.URL || ''
+      };
+    });
+}
+
+function datasetCite(d){
+  if(d.citation) return d.citation;
+  var s = (d.provider || '提供元不明') + ' (' + (d.year || 'n.d.') + '). ' + d.name;
+  if(d.version) s += ' (' + d.version + ')';
+  s += ' [データセット].';
+  if(d.doi) s += ' https://doi.org/' + d.doi;
+  else if(d.url) s += ' ' + d.url;
+  if(d.accessed) s += '（' + fmtDate(d.accessed) + ' 取得）';
+  if(d.license) s += ' ライセンス: ' + d.license;
+  return s;
+}
+
+function tabPapers(p){
   var h = '<div class="sec"><h2>先行研究・参考文献</h2><span class="sp"></span>' +
     (p.refs.length ? '<button class="btn sm ghost" data-act="refCopy">' + I.copy + '一覧をコピー</button>' : '') +
     '<button class="btn sm pri" data-act="refNew">' + I.plus + '追加</button></div>';
@@ -1661,7 +1778,7 @@ function viewSettings(){
     '<div class="setrow"><div class="main">すべて削除<div class="s mono" id="usage">記録 ' + (bytes / 1024).toFixed(1) + ' KB</div></div><button class="btn sm danger" data-act="wipe">削除</button></div>' +
     '</div>' +
     '<div class="sec"><h2>このアプリについて</h2></div><div class="card pad small muted">' +
-    'データはこの端末のブラウザ（localStorage と、画像は IndexedDB）にだけ保存され、どこにも送信されません。先行研究の「読み取る」で DOI を使うときだけ、その DOI を CrossRef の公開 API に問い合わせます。<br>' +
+    'データはこの端末のブラウザ（localStorage と、画像は IndexedDB）にだけ保存され、どこにも送信されません。出典の「読み取る」で DOI を使うときだけ、その DOI を CrossRef / doi.org に問い合わせます。<br>' +
     'ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出しておくと安心です。</div>';
 }
 
@@ -1673,6 +1790,7 @@ function render(keepScroll){
   var parts = parseRoute(), v = parts[0] || 'home', nav = v, html;
   if(v === 'p'){
     var p = getP(parts[1]);
+    if(p && parts[2] === 'datasets') parts[2] = 'refs';
     if(!p){ location.replace('#/'); return; }
     UI.cur = p; html = viewProject(p, parts[2] || 'overview'); nav = 'home';
   }else if(v === 'plan') html = viewPlan();
@@ -1712,6 +1830,11 @@ var ACT = {
   projFilter: function(el){ UI.projFilter = el.dataset.v; render(true); },
   refNew: function(){ refForm(UI.cur, null); },
   refEdit: function(el){ refForm(UI.cur, UI.cur.refs.find(function(r){ return r.id === el.dataset.id; })); },
+  dsNew: function(){ datasetForm(UI.cur, null); },
+  dsEdit: function(el){ datasetForm(UI.cur, UI.cur.datasets.find(function(d){ return d.id === el.dataset.id; })); },
+  dsCopy: function(){
+    copyText(UI.cur.datasets.map(datasetCite).join('\n'), 'データセット一覧（' + UI.cur.datasets.length + '件）をコピーしました');
+  },
   refCopy: function(){
     var text = UI.cur.refs.slice().sort(function(a, b){ return (a.authors || '').localeCompare(b.authors || ''); }).map(citeLine).join('\n');
     copyText(text, '文献一覧（' + UI.cur.refs.length + '件）をコピーしました');
@@ -1928,6 +2051,13 @@ function addSample(){
       { id:uid(), title:'Is CO2 an Indoor Pollutant? Direct Effects of Low-to-Moderate CO2 Concentrations on Human Decision-Making Performance', authors:'Usha Satish, Mark J. Mendell, Krishnamurthy Shekhar, Toshifumi Hotchi, Douglas Sullivan, Siegfried Streufert, William J. Fisk', year:'2012', venue:'Environmental Health Perspectives', doi:'10.1289/ehp.1104789', status:'読んだ', note:'1000ppm 程度でも意思決定テストの成績が下がったという報告。しきい値を 1000ppm にする根拠に使う。' },
       { id:uid(), title:'（サンプル）SCD41 データシート', authors:'Sensirion', year:'', venue:'メーカー資料', status:'精読済み', note:'自動自己校正（ASC）の仕組みと、屋外空気に触れさせる必要がある点を確認。' }
     ],
+    datasets:[
+      { id:uid(), name:'過去の気象データ（東京・1時間ごとの気温と湿度）', provider:'気象庁', year:'', version:'', status:'使用中',
+        url:'https://www.data.jma.go.jp/risk/obsdl/', license:'気象庁ホームページ利用規約（CC BY 4.0 互換）', accessed:addDays(-6), format:'CSV', size:'約 720 行（30日分）',
+        location:'Google Drive/研究/CO2/data/jma_tokyo.csv', usage:'室内の温湿度と外気の差を比べ、窓を開けたときの変化の大きさを見る。' },
+      { id:uid(), name:'自室の CO₂・温湿度 計測ログ（1分間隔）', provider:'自分で計測', year:'2026', version:'第1期', status:'これから取得',
+        format:'CSV', location:'スプレッドシート「CO2ログ」', usage:'1週間の連続計測で集める本研究のメインデータ。', note:'センサーの自動校正が効くまで最初の 1 日は除外する。' }
+    ],
     expenses:[
       { id:uid(), date:addDays(-40), name:'ESP32-DevKitC', category:'電子部品', qty:2, amount:2960, shop:'秋月電子通商', invId:esp.id },
       { id:uid(), date:addDays(-38), name:'CO₂センサーモジュール SCD41', category:'電子部品', qty:1, amount:5980, shop:'スイッチサイエンス', invId:scd.id },
@@ -1961,7 +2091,7 @@ function addSample(){
     summary:'フォトリフレクタ 4 個でラインを読み、P・PI・PID 制御でコースの周回タイムとはみ出し回数を比べる。',
     question:'ゲインの組み合わせによって、速さと安定性はどのようにトレードオフになるか。',
     method:'', outcome:'',
-    refs:[], expenses:[], uses:[], logs:[],
+    refs:[], datasets:[], expenses:[], uses:[], logs:[],
     milestones:[
       { id:uid(), title:'シャーシとモーター周りを組む', due:addDays(14), done:false },
       { id:uid(), title:'テストコースを作る', due:addDays(21), done:false },
