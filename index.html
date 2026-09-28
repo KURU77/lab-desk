@@ -1,0 +1,1409 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>研究デスク — 進行中の研究と部品をまとめて管理</title>
+<meta name="description" content="進行中の研究の概要・先行研究・費用と備品・進捗・予定を一か所で管理し、手持ちの電子部品や工具の在庫も記録できるアプリ。">
+<meta name="theme-color" content="#EDEFEA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1311" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="研究デスク">
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   研究デスク — 研究の全体像と、手持ちの部品・工具の台帳
+   色は :root のトークンだけで定義し、light / dark / OS依存 の
+   3状態すべてで解決するようにしてある。
+   ============================================================ */
+:root{
+  --bg:#EDEFEA; --grid:rgba(40,70,55,.055);
+  --card:#FBFCFA; --card-2:#F2F4EF; --sunken:#E4E7E0;
+  --ink:#161A17; --muted:#5F6862; --faint:#879089;
+  --line:#D2D8D0; --line-soft:#E1E5DE;
+  --acc:#B4531F; --acc-ink:#A04818; --acc-soft:#F5E4D8; --on-acc:#FFFFFF;
+  --pcb:#2D6A4E; --pcb-soft:#DAEADF;
+  --warn:#94620A; --warn-soft:#F4E9CF;
+  --bad:#B3261E; --bad-soft:#F6DFDC;
+  --blue:#2F5B8A; --blue-soft:#DDE7F2;
+  --shadow:0 1px 2px rgba(20,26,22,.05), 0 6px 18px rgba(20,26,22,.06);
+  --shadow-lift:0 2px 6px rgba(20,26,22,.08), 0 18px 44px rgba(20,26,22,.16);
+  --scrim:rgba(16,20,18,.45);
+  --f-body:"IBM Plex Sans JP",-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:12px; --r-sm:8px;
+  --navh:62px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1311; --grid:rgba(120,190,150,.045);
+    --card:#171C19; --card-2:#1D231F; --sunken:#121714;
+    --ink:#E4E9E5; --muted:#98A39C; --faint:#76817A;
+    --line:#29312C; --line-soft:#212823;
+    --acc:#E08A55; --acc-ink:#F0A472; --acc-soft:#3A2417; --on-acc:#1A0F08;
+    --pcb:#72C398; --pcb-soft:#15291E;
+    --warn:#DDA947; --warn-soft:#33280E;
+    --bad:#F08077; --bad-soft:#3A1B19;
+    --blue:#86B2E0; --blue-soft:#172536;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 8px 22px rgba(0,0,0,.32);
+    --shadow-lift:0 2px 8px rgba(0,0,0,.5), 0 20px 48px rgba(0,0,0,.5);
+    --scrim:rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1311; --grid:rgba(120,190,150,.045);
+  --card:#171C19; --card-2:#1D231F; --sunken:#121714;
+  --ink:#E4E9E5; --muted:#98A39C; --faint:#76817A;
+  --line:#29312C; --line-soft:#212823;
+  --acc:#E08A55; --acc-ink:#F0A472; --acc-soft:#3A2417; --on-acc:#1A0F08;
+  --pcb:#72C398; --pcb-soft:#15291E;
+  --warn:#DDA947; --warn-soft:#33280E;
+  --bad:#F08077; --bad-soft:#3A1B19;
+  --blue:#86B2E0; --blue-soft:#172536;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 8px 22px rgba(0,0,0,.32);
+  --shadow-lift:0 2px 8px rgba(0,0,0,.5), 0 20px 48px rgba(0,0,0,.5);
+  --scrim:rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;padding:0}
+body{
+  background-color:var(--bg); color:var(--ink);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:24px 24px; background-attachment:fixed;
+  font-family:var(--f-body); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
+  min-height:100vh;
+}
+body.lock{overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+a{color:var(--acc-ink);text-decoration:none}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+.mono{font-family:var(--f-mono);font-feature-settings:"zero" 1}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+.small{font-size:12.5px}
+[hidden]{display:none!important}
+
+/* ---------- 骨組み ---------- */
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header.top{
+  position:sticky;top:0;z-index:20;
+  padding:calc(env(safe-area-inset-top) + 10px) 0 10px;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line-soft);
+}
+header.top .wrap{display:flex;align-items:center;gap:10px;min-height:40px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.02em;font-size:17px}
+.brand i{width:22px;height:22px;border-radius:6px;background:var(--acc);display:grid;place-items:center;flex:none}
+.brand i::after{content:"";width:8px;height:8px;border-radius:50%;border:2px solid var(--on-acc)}
+.top h1{font-size:17px;margin:0;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .sp{flex:1}
+.iconbtn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted);flex:none}
+.iconbtn:hover{background:var(--sunken);color:var(--ink)}
+.iconbtn svg{width:21px;height:21px}
+main{padding:16px 0 calc(var(--navh) + env(safe-area-inset-bottom) + 90px)}
+
+nav.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:color-mix(in srgb, var(--card) 92%, transparent);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr);height:var(--navh)}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--faint);font-size:11px;font-weight:500}
+nav.tabs a svg{width:22px;height:22px}
+nav.tabs a.on{color:var(--acc-ink)}
+
+/* ---------- 部品 ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:14px 16px}
+.sec{margin:22px 0 10px;display:flex;align-items:baseline;gap:10px}
+.sec h2{font-size:13px;margin:0;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.sec .sp{flex:1}
+.sec .lnk{font-size:13px;font-weight:500}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;
+  border:1px solid var(--line);background:var(--card);font-weight:500;font-size:14px;white-space:nowrap}
+.btn:hover{background:var(--card-2)}
+.btn svg{width:17px;height:17px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.btn.pri:hover{filter:brightness(1.06)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.btn.sm{height:32px;padding:0 11px;font-size:13px;border-radius:8px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--sunken)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+
+.fab{position:fixed;z-index:25;right:max(16px, calc(50% - 380px + 16px));bottom:calc(var(--navh) + env(safe-area-inset-bottom) + 16px);
+  height:52px;padding:0 20px 0 16px;border-radius:26px;background:var(--acc);color:var(--on-acc);
+  display:flex;align-items:center;gap:8px;font-weight:700;box-shadow:var(--shadow-lift)}
+.fab svg{width:22px;height:22px}
+
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:11px;font-size:11.5px;font-weight:700;letter-spacing:.03em;white-space:nowrap;
+  background:var(--sunken);color:var(--muted)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.plain::before{display:none}
+.st-進行中{background:var(--pcb-soft);color:var(--pcb)}
+.st-計画中{background:var(--blue-soft);color:var(--blue)}
+.st-中断{background:var(--warn-soft);color:var(--warn)}
+.st-完了{background:var(--sunken);color:var(--muted)}
+.pill.acc{background:var(--acc-soft);color:var(--acc-ink)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ok{background:var(--pcb-soft);color:var(--pcb)}
+
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none;margin:0 -16px;padding-left:16px;padding-right:16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--line);background:var(--card);font-size:13px;font-weight:500;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.chip b{font-family:var(--f-mono);font-weight:500;font-size:11.5px;color:var(--faint)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip.on b{color:inherit;opacity:.7}
+
+.bar{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+.bar.done i{background:var(--pcb)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{padding:12px 12px 10px}
+.stat .k{font-size:11.5px;color:var(--muted);font-weight:500}
+.stat .v{font-family:var(--f-mono);font-size:20px;font-weight:600;letter-spacing:-.01em;line-height:1.3;white-space:nowrap}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:500;margin-left:2px}
+@media (max-width:560px){ .stats{grid-template-columns:repeat(2,1fr)} }
+
+.empty{text-align:center;padding:36px 20px;color:var(--muted)}
+.empty .big{font-size:16px;color:var(--ink);font-weight:700;margin-bottom:6px}
+.empty .btnrow{justify-content:center;margin-top:16px}
+
+/* 研究カード */
+.plist{display:grid;gap:10px}
+.proj{display:block;color:inherit;padding:14px 16px 13px;position:relative;overflow:hidden}
+.proj:hover{border-color:color-mix(in srgb,var(--acc) 35%,var(--line))}
+.proj .hd{display:flex;align-items:flex-start;gap:10px}
+.proj h3{margin:0;font-size:16px;line-height:1.45;flex:1;min-width:0}
+.proj .sum{margin:6px 0 10px;color:var(--muted);font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.proj .pr{display:flex;align-items:center;gap:10px}
+.proj .pr .bar{flex:1}
+.proj .pr .n{font-family:var(--f-mono);font-size:12.5px;font-weight:600;min-width:38px;text-align:right}
+.proj .meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px;font-size:12.5px;color:var(--muted)}
+.proj .meta span{display:inline-flex;align-items:center;gap:5px}
+.proj .meta svg{width:14px;height:14px;opacity:.8}
+.proj .meta .next{color:var(--ink)}
+
+/* 行リスト */
+.rows{padding:2px 0}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line-soft);color:inherit;min-height:52px}
+.row:first-child{border-top:0}
+button.row{width:100%;text-align:left}
+.row:where(a,button):hover{background:var(--card-2)}
+.row .main{flex:1;min-width:0}
+.row .t{font-weight:500;line-height:1.45;overflow-wrap:anywhere}
+.row .s{font-size:12.5px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.row .amt{font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+.row .date{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap;width:74px;flex:none}
+.row.done .t{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--line)}
+
+.chk{width:24px;height:24px;border-radius:7px;border:2px solid var(--line);flex:none;display:grid;place-items:center;background:var(--card)}
+.chk svg{width:15px;height:15px;opacity:0;color:var(--on-acc)}
+.chk.on{background:var(--pcb);border-color:var(--pcb)}
+.chk.on svg{opacity:1;color:var(--card)}
+
+.due{font-family:var(--f-mono);font-size:12px;white-space:nowrap;color:var(--muted)}
+.due.over{color:var(--bad);font-weight:600}
+.due.soon{color:var(--warn);font-weight:600}
+
+/* 研究詳細 */
+.phead{padding:16px 16px 14px}
+.phead .st{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.phead h2{margin:0 0 4px;font-size:20px;line-height:1.4}
+.phead .pr{display:flex;align-items:center;gap:12px;margin-top:12px}
+.phead .pr .bar{flex:1;height:8px;border-radius:4px}
+.phead .pr .n{font-family:var(--f-mono);font-weight:600;font-size:15px}
+.seg{display:flex;gap:2px;background:var(--sunken);border-radius:11px;padding:3px;margin:14px 0 4px;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+@media (max-width:420px){ .seg a{padding:7px 7px;font-size:12.5px} .seg a b{margin-left:1px} }
+.seg a{flex:1 0 auto;text-align:center;padding:7px 10px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap}
+.seg a.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.seg a b{font-family:var(--f-mono);font-size:11px;color:var(--faint);font-weight:500;margin-left:3px}
+
+.dl{display:grid;gap:0}
+.dl > div{padding:12px 16px;border-top:1px solid var(--line-soft)}
+.dl > div:first-child{border-top:0}
+.dl dt{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+.dl dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.dl dd.none{color:var(--faint)}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-size:12px;padding:1px 8px;border-radius:6px;background:var(--sunken);color:var(--muted)}
+
+.ref .t{font-weight:600}
+.ref .s i{font-style:normal;color:var(--ink)}
+.ref .note{margin-top:5px;font-size:13px;padding-left:10px;border-left:2px solid var(--acc-soft);color:var(--muted);white-space:pre-wrap}
+.ref .links{display:flex;gap:10px;margin-top:4px;font-size:12.5px}
+
+.total{display:flex;align-items:baseline;gap:10px;padding:16px}
+.total .v{font-family:var(--f-mono);font-size:28px;font-weight:600;letter-spacing:-.02em}
+.catbars{padding:0 16px 14px;display:grid;gap:7px}
+.catbar{display:grid;grid-template-columns:96px 1fr 84px;align-items:center;gap:10px;font-size:12.5px}
+.catbar .bar{height:8px}
+.catbar .amt{font-family:var(--f-mono);text-align:right}
+
+.ring{display:flex;align-items:center;gap:18px;padding:16px}
+.ring svg{width:92px;height:92px;flex:none}
+.ring .lbl{font-size:13px;color:var(--muted)}
+.ring .big{font-family:var(--f-mono);font-size:30px;font-weight:600}
+.range{width:100%;accent-color:var(--acc)}
+.logadd{padding:12px 16px;display:grid;gap:8px}
+.logadd textarea{min-height:70px}
+.tl{padding:6px 16px 10px}
+.tl .it{position:relative;padding:8px 0 10px 20px;border-left:2px solid var(--line-soft);margin-left:5px}
+.tl .it::before{content:"";position:absolute;left:-6px;top:14px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--acc)}
+.tl .it .d{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.tl .it .x{white-space:pre-wrap;overflow-wrap:anywhere}
+.tl .it button{position:absolute;right:0;top:6px;color:var(--faint);font-size:12px}
+
+/* 在庫 */
+.search{position:relative;margin-bottom:10px}
+.search input{width:100%;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--card);padding:0 12px 0 38px;font-size:15px}
+.search svg{position:absolute;left:12px;top:11px;width:19px;height:19px;color:var(--faint)}
+.toolbar{display:flex;gap:8px;align-items:center;margin:8px 0 2px;flex-wrap:wrap}
+.toolbar .sp{flex:1}
+.toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer}
+.toggle input{accent-color:var(--acc);width:16px;height:16px}
+.grp{margin-top:14px}
+.grp h3{font-size:12.5px;font-weight:700;color:var(--muted);margin:0 2px 6px;display:flex;gap:8px;align-items:baseline;letter-spacing:.04em}
+.grp h3 b{font-family:var(--f-mono);font-weight:500;color:var(--faint)}
+.inv .t small{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
+.qty{display:flex;align-items:center;gap:2px;flex:none}
+.qty button{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--muted);border:1px solid var(--line-soft)}
+.qty button:hover{background:var(--sunken);color:var(--ink)}
+.qty button svg{width:14px;height:14px}
+.qty .n{min-width:44px;text-align:center;font-family:var(--f-mono);font-weight:600;font-size:14px;line-height:1.1}
+.qty .n small{display:block;font-family:var(--f-body);font-size:10px;color:var(--faint);font-weight:500}
+.qty .n.low{color:var(--bad)}
+
+/* シート */
+.sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
+.sheet .panel{position:relative;width:100%;max-width:640px;max-height:92vh;overflow:auto;background:var(--card);
+  border-radius:18px 18px 0 0;box-shadow:var(--shadow-lift);transform:translateY(24px);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s;
+  padding:8px 18px calc(18px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+.sheet.open .scrim{opacity:1}
+.sheet.open .panel{transform:none;opacity:1}
+@media (min-width:700px){ .sheet{align-items:center} .sheet .panel{border-radius:18px;max-height:86vh;padding-bottom:18px} }
+.panel .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:2px auto 10px}
+.panel h2{font-size:17px;margin:0 0 14px}
+.form{display:flex;flex-wrap:wrap;gap:12px}
+.fld{flex:1 1 100%;display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld.half{flex:1 1 calc(50% - 6px)}
+.fld.third{flex:1 1 calc(33% - 8px)}
+.fld > span{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+.fld small{font-size:11.5px;color:var(--faint)}
+.fld input:not([type=checkbox]),.fld select,.fld textarea,.logadd textarea,.logadd input{
+  width:100%;border:1px solid var(--line);background:var(--card-2);border-radius:9px;padding:9px 11px;font-size:15px;min-height:42px}
+.fld textarea,.logadd textarea{resize:vertical;line-height:1.55}
+.fld input:focus,.fld select:focus,.fld textarea:focus,.logadd textarea:focus,.search input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.fld.check{flex-direction:row;align-items:center;gap:9px}
+.fld.check input{width:18px;height:18px;accent-color:var(--acc)}
+.fld.check > span{font-size:14px;font-weight:500;color:var(--ink);letter-spacing:0}
+.formbtns{display:flex;gap:8px;margin-top:18px;align-items:center}
+.formbtns .sp{flex:1}
+.paste{background:var(--sunken);border-radius:11px;padding:12px;margin-bottom:14px;display:grid;gap:8px}
+.paste textarea{width:100%;border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 10px;font-size:13px;font-family:var(--f-mono);min-height:62px;resize:vertical}
+.paste .hint{font-size:12px;color:var(--muted)}
+.infobox{background:var(--card-2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;font-size:13px;margin-top:14px}
+.infobox b{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.pick{max-height:50vh;overflow:auto;border:1px solid var(--line-soft);border-radius:10px;margin-top:8px}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--navh) + env(safe-area-inset-bottom) + 84px);transform:translateX(-50%) translateY(10px);
+  background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:.2s;z-index:80;max-width:88vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+.setrow{display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid var(--line-soft)}
+.setrow:first-child{border-top:0}
+.setrow .main{flex:1}
+.setrow .s{font-size:12.5px;color:var(--muted)}
+.setrow select{border:1px solid var(--line);background:var(--card-2);border-radius:8px;padding:6px 8px}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap" id="topbar"></div></header>
+<main><div class="wrap" id="view"></div></main>
+
+<nav class="tabs" aria-label="メインメニュー"><div class="wrap">
+  <a href="#/" data-nav="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></svg>研究</a>
+  <a href="#/plan" data-nav="plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14.5l2 2 4-4"/></svg>予定</a>
+  <a href="#/inv" data-nav="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 6V3M12 6V3M15 6V3M9 21v-3M12 21v-3M15 21v-3M6 9H3M6 12H3M6 15H3M21 9h-3M21 12h-3M21 15h-3"/></svg>部品・工具</a>
+  <a href="#/settings" data-nav="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>設定</a>
+</div></nav>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="scrim" data-act="closeSheet"></div>
+  <div class="panel" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ============================================================
+   データ
+   ============================================================ */
+var KEY = 'lab-desk-v1';
+var STATUSES = ['進行中','計画中','中断','完了'];
+var EXP_CATS = ['電子部品','工具・計測器','材料・消耗品','書籍・文献','ソフト・サービス','交通・発送','その他'];
+var INV_CATS = ['マイコン・ボード','センサ','表示・LED','モーター・駆動','電源・電池','受動部品','半導体・IC','通信モジュール','コネクタ・配線','基板・ブレッドボード','工具','計測器','材料・消耗品','その他'];
+var REF_STATUS = ['未読','読んだ','精読済み','引用予定'];
+
+var DB = load();
+var UI = { projFilter:'すべて', invQuery:'', invCat:'すべて', invLow:false, lastRoute:'' };
+
+function blank(){ return { v:1, projects:[], inventory:[], settings:{ theme:'auto' } }; }
+function load(){
+  try{
+    var d = JSON.parse(localStorage.getItem(KEY));
+    if(d && d.v) return normalize(d);
+  }catch(e){}
+  return blank();
+}
+function normalize(d){
+  d.projects = Array.isArray(d.projects) ? d.projects : [];
+  d.inventory = Array.isArray(d.inventory) ? d.inventory : [];
+  d.settings = d.settings || { theme:'auto' };
+  d.projects.forEach(function(p){
+    ['refs','expenses','uses','milestones','logs','tags'].forEach(function(k){ if(!Array.isArray(p[k])) p[k] = []; });
+    if(!p.status) p.status = '計画中';
+    if(!p.progressMode) p.progressMode = 'auto';
+  });
+  d.inventory.forEach(function(it){ if(!Array.isArray(it.tags)) it.tags = []; });
+  return d;
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch(e){ toast('保存できませんでした（ストレージの空きを確認してください）'); }
+}
+
+/* ============================================================
+   小道具
+   ============================================================ */
+function $(s, r){ return (r || document).querySelector(s); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function todayISO(){ var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function addDays(n){ var d = new Date(); d.setDate(d.getDate() + n); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function yen(n){ return '¥' + Math.round(+n || 0).toLocaleString('ja-JP'); }
+function num(n){ return (+n || 0).toLocaleString('ja-JP'); }
+function fmtDate(iso){ if(!iso) return ''; var a = iso.split('-'); return a[0] + '/' + (+a[1]) + '/' + (+a[2]); }
+function fmtShort(iso){ if(!iso) return ''; var a = iso.split('-'); return (+a[1]) + '/' + (+a[2]); }
+function daysUntil(iso){ return Math.round((new Date(iso + 'T00:00:00') - new Date(todayISO() + 'T00:00:00')) / 864e5); }
+function dueLabel(iso){
+  if(!iso) return { t:'期限なし', c:'' };
+  var n = daysUntil(iso);
+  if(n < 0) return { t: fmtShort(iso) + '（' + (-n) + '日超過）', c:'over' };
+  if(n === 0) return { t:'今日', c:'soon' };
+  if(n === 1) return { t:'明日', c:'soon' };
+  if(n <= 7) return { t: fmtShort(iso) + '（あと' + n + '日）', c:'soon' };
+  return { t: fmtDate(iso), c:'' };
+}
+function splitTags(s){ return String(s || '').split(/[,、，\s]+/).map(function(t){ return t.trim().replace(/^#/, ''); }).filter(Boolean); }
+function getP(id){ return DB.projects.find(function(p){ return p.id === id; }); }
+function getInv(id){ return DB.inventory.find(function(i){ return i.id === id; }); }
+function projCost(p){ return p.expenses.reduce(function(s, e){ return s + (+e.amount || 0); }, 0); }
+function projProgress(p){
+  if(p.progressMode === 'manual') return Math.max(0, Math.min(100, +p.progressManual || 0));
+  if(!p.milestones.length) return p.status === '完了' ? 100 : 0;
+  var d = p.milestones.filter(function(m){ return m.done; }).length;
+  return Math.round(d / p.milestones.length * 100);
+}
+function nextMilestone(p){
+  return p.milestones.filter(function(m){ return !m.done; })
+    .sort(function(a, b){ return (a.due || '9999') < (b.due || '9999') ? -1 : 1; })[0];
+}
+function touch(p){ p.updatedAt = new Date().toISOString(); }
+
+var toastT;
+function toast(msg){
+  var t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+var I = {
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  minus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
+  yen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l6 8 6-8M12 12v8M7.5 13h9M7.5 16.5h9"/></svg>',
+  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  chip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 7V4M14 7V4M10 20v-3M14 20v-3M7 10H4M7 14H4M20 10h-3M20 14h-3"/></svg>',
+  copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>'
+};
+
+/* ============================================================
+   シート（フォーム）
+   ============================================================ */
+function openSheet(html, onMount){
+  var s = $('#sheet');
+  $('#sheetBody').innerHTML = html;
+  s.hidden = false;
+  document.body.classList.add('lock');
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ s.classList.add('open'); }); });
+  if(onMount) onMount($('#sheetBody'));
+}
+function closeSheet(){
+  var s = $('#sheet');
+  if(s.hidden) return;
+  s.classList.remove('open');
+  document.body.classList.remove('lock');
+  setTimeout(function(){ if(!s.classList.contains('open')){ s.hidden = true; $('#sheetBody').innerHTML = ''; } }, 230);
+}
+
+function fieldHTML(f, v){
+  var id = 'f_' + f.k, val = (v === undefined || v === null) ? (f.def !== undefined ? f.def : '') : v;
+  var ph = f.ph ? ' placeholder="' + esc(f.ph) + '"' : '';
+  var inp;
+  if(f.type === 'textarea'){
+    inp = '<textarea id="' + id + '" name="' + f.k + '" rows="' + (f.rows || 3) + '"' + ph + '>' + esc(val) + '</textarea>';
+  }else if(f.type === 'select'){
+    inp = '<select id="' + id + '" name="' + f.k + '">' + f.options.map(function(o){
+      return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>';
+    }).join('') + '</select>';
+  }else if(f.type === 'check'){
+    return '<label class="fld check"><input type="checkbox" id="' + id + '" name="' + f.k + '"' + (val ? ' checked' : '') + '><span>' + esc(f.label) + '</span></label>';
+  }else{
+    var type = f.type === 'tags' ? 'text' : (f.type || 'text');
+    if(f.type === 'tags' && Array.isArray(val)) val = val.join(', ');
+    var extra = type === 'number' ? ' inputmode="decimal" step="any"' : '';
+    if(f.list) extra += ' list="dl_' + f.k + '"';
+    inp = '<input type="' + type + '" id="' + id + '" name="' + f.k + '" value="' + esc(val) + '"' + ph + extra + (f.req ? ' required' : '') + '>';
+    if(f.list) inp += '<datalist id="dl_' + f.k + '">' + f.list.map(function(o){ return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
+  }
+  return '<label class="fld' + (f.w ? ' ' + f.w : '') + '"><span>' + esc(f.label) + (f.req ? ' *' : '') + '</span>' + inp + (f.hint ? '<small>' + esc(f.hint) + '</small>' : '') + '</label>';
+}
+
+/* opts: title, fields, values, top(html), bottom(html), onSave(vals)→false で閉じない, onDelete, delLabel, mount */
+function formSheet(opts){
+  var v = opts.values || {};
+  var html = '<h2>' + esc(opts.title) + '</h2>' + (opts.top || '') +
+    '<form class="form" id="sheetForm" autocomplete="off">' +
+    opts.fields.map(function(f){ return fieldHTML(f, v[f.k]); }).join('') +
+    '</form>' + (opts.bottom || '') +
+    '<div class="formbtns">' +
+      (opts.onDelete ? '<button type="button" class="btn danger" id="sheetDel">' + esc(opts.delLabel || '削除') + '</button>' : '') +
+      '<span class="sp"></span><button type="button" class="btn" data-act="closeSheet">キャンセル</button>' +
+      '<button type="submit" form="sheetForm" class="btn pri">保存</button>' +
+    '</div>';
+  openSheet(html, function(root){
+    var form = $('#sheetForm', root);
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var out = {};
+      opts.fields.forEach(function(f){
+        var el = form.elements[f.k];
+        if(!el) return;
+        if(f.type === 'check') out[f.k] = el.checked;
+        else if(f.type === 'number') out[f.k] = el.value === '' ? '' : +el.value;
+        else if(f.type === 'tags') out[f.k] = splitTags(el.value);
+        else out[f.k] = el.value.trim();
+      });
+      for(var i = 0; i < opts.fields.length; i++){
+        var f = opts.fields[i];
+        if(f.req && !out[f.k] && out[f.k] !== 0){ toast(f.label + 'を入力してください'); form.elements[f.k].focus(); return; }
+      }
+      if(opts.onSave(out) !== false) closeSheet();
+    });
+    if(opts.onDelete) $('#sheetDel', root).addEventListener('click', function(){
+      if(confirm(opts.delConfirm || '削除しますか？')){ opts.onDelete(); closeSheet(); }
+    });
+    if(opts.mount) opts.mount(root, form);
+    var first = form.querySelector('input:not([type=checkbox]),textarea');
+    if(first && !opts.values && window.matchMedia('(pointer:fine)').matches) first.focus();
+  });
+}
+
+/* ============================================================
+   フォーム定義
+   ============================================================ */
+function projectForm(p){
+  var isNew = !p;
+  formSheet({
+    title: isNew ? '研究を追加' : '研究を編集',
+    values: p,
+    fields: [
+      { k:'title', label:'研究テーマ', req:true, ph:'例：自作センサーで室内のCO₂を記録する' },
+      { k:'status', label:'状態', type:'select', options:STATUSES, def:'計画中', w:'half' },
+      { k:'tags', label:'タグ', type:'tags', ph:'カンマ区切り', w:'half' },
+      { k:'startDate', label:'開始日', type:'date', def: isNew ? todayISO() : '', w:'half' },
+      { k:'targetDate', label:'目標（締切）', type:'date', w:'half' },
+      { k:'summary', label:'概要', type:'textarea', rows:4, ph:'何を・なぜ・どうやって、を数行で' },
+      { k:'question', label:'研究課題・目的', type:'textarea', rows:3, ph:'明らかにしたいこと／作りたいもの' },
+      { k:'method', label:'方法・アプローチ', type:'textarea', rows:3 },
+      { k:'outcome', label:'成果物・発表先', type:'textarea', rows:2, ph:'レポート、学会、コンテスト、公開リポジトリ など' }
+    ],
+    onSave: function(v){
+      if(isNew){
+        var np = Object.assign({ id:uid(), refs:[], expenses:[], uses:[], milestones:[], logs:[], progressMode:'auto', progressManual:0, createdAt:new Date().toISOString() }, v);
+        touch(np); DB.projects.unshift(np); save();
+        location.hash = '#/p/' + np.id;
+      }else{
+        Object.assign(p, v); touch(p); save(); render(true);
+      }
+    },
+    onDelete: isNew ? null : function(){
+      DB.projects = DB.projects.filter(function(x){ return x !== p; });
+      save(); location.hash = '#/'; toast('研究を削除しました');
+    },
+    delConfirm: '「' + (p ? p.title : '') + '」を削除しますか？ 文献・費用・予定・記録もすべて消えます。'
+  });
+}
+
+function refForm(p, r){
+  var isNew = !r;
+  formSheet({
+    title: isNew ? '先行研究を追加' : '先行研究を編集',
+    values: r,
+    top: '<div class="paste"><textarea id="pasteRef" placeholder="BibTeX・DOI・論文のURLを貼り付け"></textarea>' +
+      '<div class="btnrow"><button type="button" class="btn sm" id="pasteGo">読み取る</button><span class="hint" style="align-self:center">DOI があれば CrossRef から書誌を取得します</span></div></div>',
+    fields: [
+      { k:'title', label:'タイトル', req:true, type:'textarea', rows:2 },
+      { k:'authors', label:'著者', ph:'山田太郎, Jane Doe' },
+      { k:'year', label:'年', w:'third', ph:'2024' },
+      { k:'venue', label:'掲載誌・会議・出版社', w:'third' },
+      { k:'status', label:'状態', type:'select', options:REF_STATUS, def:'未読', w:'third' },
+      { k:'doi', label:'DOI', w:'half', ph:'10.xxxx/xxxxx' },
+      { k:'url', label:'URL', type:'url', w:'half' },
+      { k:'note', label:'この研究との関係・メモ', type:'textarea', rows:3, ph:'何を参考にするか、どこが違うか' }
+    ],
+    mount: function(root, form){
+      $('#pasteGo', root).addEventListener('click', function(){
+        var text = $('#pasteRef', root).value;
+        if(!text.trim()) return;
+        var got = parseRef(text);
+        fill(got);
+        if(got.doi && (!got.title || !got.authors)){
+          toast('CrossRef に問い合わせ中…');
+          fetchCrossref(got.doi).then(function(c){ fill(c); toast('書誌を取得しました'); })
+            .catch(function(){ toast('取得できませんでした（DOI とオンライン状態を確認）'); });
+        }else if(Object.keys(got).length){ toast('読み取りました'); }
+        else toast('読み取れる情報が見つかりませんでした');
+      });
+      function fill(o){
+        Object.keys(o).forEach(function(k){ if(o[k] && form.elements[k]) form.elements[k].value = o[k]; });
+      }
+    },
+    onSave: function(v){
+      if(isNew){ v.id = uid(); v.addedAt = todayISO(); p.refs.push(v); }
+      else Object.assign(r, v);
+      touch(p); save(); render(true);
+    },
+    onDelete: isNew ? null : function(){ p.refs = p.refs.filter(function(x){ return x !== r; }); touch(p); save(); render(true); }
+  });
+}
+
+function parseRef(text){
+  text = text.trim();
+  var r = {};
+  if(/^@\w+\s*[{(]/.test(text)){
+    var get = function(k){
+      var m = text.match(new RegExp('(?:^|[,\\s])' + k + '\\s*=\\s*(?:\\{((?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*)\\}|"([^"]*)"|(\\w+))', 'i'));
+      if(!m) return '';
+      return (m[1] != null ? m[1] : m[2] != null ? m[2] : m[3]).replace(/[{}]/g, '').replace(/\\&/g, '&').replace(/\s+/g, ' ').trim();
+    };
+    r.title = get('title');
+    var au = get('author');
+    if(au) r.authors = au.split(/\s+and\s+/i).map(function(a){
+      if(a.indexOf(',') >= 0){ var x = a.split(','); return (x[1].trim() + ' ' + x[0].trim()).trim(); }
+      return a.trim();
+    }).join(', ');
+    r.year = get('year');
+    r.venue = get('journal') || get('booktitle') || get('publisher') || get('school') || get('howpublished');
+    r.doi = get('doi');
+    r.url = get('url');
+    Object.keys(r).forEach(function(k){ if(!r[k]) delete r[k]; });
+    return r;
+  }
+  var doi = text.match(/10\.\d{4,9}\/[^\s"<>]+/);
+  if(doi) r.doi = doi[0].replace(/[.,;)\]]+$/, '');
+  var arx = text.match(/arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5})/i) || text.match(/^arXiv:\s*(\d{4}\.\d{4,5})/i);
+  if(arx && !r.doi) r.doi = '10.48550/arXiv.' + arx[1];
+  var url = text.match(/https?:\/\/\S+/);
+  if(url) r.url = url[0];
+  return r;
+}
+
+function fetchCrossref(doi){
+  return fetch('https://api.crossref.org/works/' + encodeURIComponent(doi))
+    .then(function(res){ if(!res.ok) throw new Error(res.status); return res.json(); })
+    .then(function(j){
+      var m = j.message || {};
+      var cjk = /[぀-ヿ㐀-鿿]/;
+      var au = (m.author || []).map(function(a){
+        if(a.name) return a.name;
+        var g = a.given || '', f = a.family || '';
+        return cjk.test(f + g) ? f + g : (g + ' ' + f).trim();
+      }).join(', ');
+      var y = (m.issued && m.issued['date-parts'] && m.issued['date-parts'][0][0]) || '';
+      return {
+        title: (m.title || [])[0] || '',
+        authors: au,
+        year: y ? String(y) : '',
+        venue: (m['container-title'] || [])[0] || m.publisher || '',
+        doi: m.DOI || doi,
+        url: m.URL || ''
+      };
+    });
+}
+
+function citeLine(r){
+  var s = (r.authors || '著者不明') + ' (' + (r.year || 'n.d.') + '). ' + r.title + '.';
+  if(r.venue) s += ' ' + r.venue + '.';
+  if(r.doi) s += ' https://doi.org/' + r.doi;
+  else if(r.url) s += ' ' + r.url;
+  return s;
+}
+
+function expenseForm(p, e){
+  var isNew = !e;
+  formSheet({
+    title: isNew ? '費用を記録' : '費用を編集',
+    values: e,
+    fields: [
+      { k:'name', label:'品名・内容', req:true, ph:'例：CO₂センサーモジュール SCD41' },
+      { k:'amount', label:'金額（合計・円）', type:'number', req:true, w:'half' },
+      { k:'qty', label:'数量', type:'number', def:1, w:'half' },
+      { k:'date', label:'日付', type:'date', def:todayISO(), w:'half' },
+      { k:'category', label:'区分', type:'select', options:EXP_CATS, def:'電子部品', w:'half' },
+      { k:'shop', label:'購入先', list: shopList(), ph:'秋月電子、Amazon など' },
+      { k:'note', label:'メモ', type:'textarea', rows:2 }
+    ].concat(isNew ? [{ k:'toInv', label:'部品・工具の台帳にも登録して、この研究の備品に加える', type:'check', def:false }] : []),
+    onSave: function(v){
+      var toInv = v.toInv; delete v.toInv;
+      if(isNew){ v.id = uid(); p.expenses.push(v); e = v; }
+      else Object.assign(e, v);
+      touch(p); save(); render(true);
+      if(toInv){
+        var saved = e;
+        setTimeout(function(){
+          invForm(null, {
+            name: saved.name, qty: saved.qty || 1, price: saved.qty ? Math.round(saved.amount / saved.qty) : saved.amount,
+            purchased: saved.date, shop: saved.shop, category: saved.category === '工具・計測器' ? '工具' : saved.category === '材料・消耗品' ? '材料・消耗品' : 'その他'
+          }, function(item){
+            saved.invId = item.id;
+            p.uses.push({ id:uid(), invId:item.id, qty: item.qty || 1, note:'' });
+            touch(p); save(); render(true);
+          });
+        }, 260);
+      }
+    },
+    onDelete: isNew ? null : function(){ p.expenses = p.expenses.filter(function(x){ return x !== e; }); touch(p); save(); render(true); }
+  });
+}
+function shopList(){
+  var s = {};
+  DB.projects.forEach(function(p){ p.expenses.forEach(function(e){ if(e.shop) s[e.shop] = 1; }); });
+  DB.inventory.forEach(function(i){ if(i.shop) s[i.shop] = 1; });
+  ['秋月電子通商','スイッチサイエンス','マルツ','千石電商','Amazon','モノタロウ'].forEach(function(x){ s[x] = 1; });
+  return Object.keys(s);
+}
+function locList(){
+  var s = {};
+  DB.inventory.forEach(function(i){ if(i.location) s[i.location] = 1; });
+  return Object.keys(s);
+}
+
+function milestoneForm(p, m){
+  var isNew = !m;
+  formSheet({
+    title: isNew ? '予定を追加' : '予定を編集',
+    values: m,
+    fields: [
+      { k:'title', label:'やること・節目', req:true, ph:'例：試作回路を組む' },
+      { k:'due', label:'期限', type:'date', w:'half' },
+      { k:'done', label:'完了', type:'check', w:'half' },
+      { k:'note', label:'メモ', type:'textarea', rows:2 }
+    ],
+    onSave: function(v){
+      if(v.done && !(m && m.done)) v.doneDate = todayISO();
+      if(!v.done) v.doneDate = '';
+      if(isNew){ v.id = uid(); p.milestones.push(v); }
+      else Object.assign(m, v);
+      touch(p); save(); render(true);
+    },
+    onDelete: isNew ? null : function(){ p.milestones = p.milestones.filter(function(x){ return x !== m; }); touch(p); save(); render(true); }
+  });
+}
+
+function logForm(p, l){
+  formSheet({
+    title: '記録を編集', values: l,
+    fields: [ { k:'date', label:'日付', type:'date' }, { k:'text', label:'内容', type:'textarea', rows:5, req:true } ],
+    onSave: function(v){ Object.assign(l, v); touch(p); save(); render(true); },
+    onDelete: function(){ p.logs = p.logs.filter(function(x){ return x !== l; }); touch(p); save(); render(true); }
+  });
+}
+
+function usesOf(invId){
+  var out = [];
+  DB.projects.forEach(function(p){ p.uses.forEach(function(u){ if(u.invId === invId) out.push({ p:p, u:u }); }); });
+  return out;
+}
+
+function invForm(it, preset, after){
+  var isNew = !it;
+  var us = it ? usesOf(it.id) : [];
+  formSheet({
+    title: isNew ? '部品・工具を登録' : '部品・工具を編集',
+    values: it || preset,
+    fields: [
+      { k:'name', label:'名前', req:true, ph:'例：ESP32-DevKitC、はんだごて' },
+      { k:'category', label:'分類', type:'select', options:INV_CATS, def:'その他', w:'half' },
+      { k:'model', label:'型番・規格', ph:'例：BME280 / 10kΩ 1/4W', w:'half' },
+      { k:'qty', label:'数量', type:'number', def:1, w:'third' },
+      { k:'unit', label:'単位', def:'個', list:['個','本','枚','セット','m','袋','台','巻'], w:'third' },
+      { k:'minQty', label:'これ以下で補充', type:'number', w:'third', hint:'空欄なら通知しない' },
+      { k:'location', label:'保管場所', list: locList(), ph:'例：引き出し A-2', w:'half' },
+      { k:'price', label:'単価（円）', type:'number', w:'half' },
+      { k:'purchased', label:'購入日', type:'date', w:'half' },
+      { k:'shop', label:'購入先', list: shopList(), w:'half' },
+      { k:'url', label:'商品ページ・データシート URL', type:'url' },
+      { k:'tags', label:'タグ', type:'tags', ph:'I2C, 3.3V など' },
+      { k:'note', label:'メモ', type:'textarea', rows:2, ph:'ピン配置の注意、動作確認済み など' }
+    ],
+    bottom: us.length ? '<div class="infobox"><b>使っている研究</b>' + us.map(function(x){
+      return '<div><a href="#/p/' + x.p.id + '/cost" data-act="closeSheet">' + esc(x.p.title) + '</a> <span class="muted mono small">× ' + esc(x.u.qty) + '</span></div>';
+    }).join('') + '</div>' : '',
+    onSave: function(v){
+      var item;
+      if(isNew){ item = Object.assign({ id:uid(), createdAt:todayISO() }, v); DB.inventory.push(item); }
+      else { Object.assign(it, v); item = it; }
+      save();
+      if(after) after(item);
+      render(true);
+      toast(isNew ? '登録しました' : '保存しました');
+    },
+    onDelete: isNew ? null : function(){
+      DB.inventory = DB.inventory.filter(function(x){ return x !== it; });
+      DB.projects.forEach(function(p){
+        p.uses = p.uses.filter(function(u){ return u.invId !== it.id; });
+        p.expenses.forEach(function(e){ if(e.invId === it.id) delete e.invId; });
+      });
+      save(); render(true);
+    },
+    delConfirm: us.length ? 'この部品は ' + us.length + ' 件の研究で備品として使われています。削除すると備品一覧からも外れます。削除しますか？' : '削除しますか？'
+  });
+}
+
+function useForm(p, u){
+  var it = getInv(u.invId);
+  formSheet({
+    title: it ? it.name : '備品',
+    values: u,
+    top: it ? '<p class="muted small" style="margin:-8px 0 12px">' + esc(it.category) + (it.model ? ' ・ ' + esc(it.model) : '') + ' ・ 在庫 ' + esc(num(it.qty)) + esc(it.unit || '個') + (it.location ? ' ・ ' + esc(it.location) : '') + '</p>' : '',
+    fields: [
+      { k:'qty', label:'この研究で使う数', type:'number', w:'half' },
+      { k:'note', label:'用途', w:'half', ph:'例：温湿度の計測' }
+    ],
+    bottom: it ? '<div class="btnrow" style="margin-top:12px"><button type="button" class="btn sm" data-act="invOpen" data-id="' + it.id + '">台帳の情報を開く</button></div>' : '',
+    onSave: function(v){ Object.assign(u, v); touch(p); save(); render(true); },
+    onDelete: function(){ p.uses = p.uses.filter(function(x){ return x !== u; }); touch(p); save(); render(true); },
+    delLabel: 'この研究から外す', delConfirm: 'この研究の備品から外しますか？（台帳からは消えません）'
+  });
+}
+
+function usePicker(p){
+  var used = {};
+  p.uses.forEach(function(u){ used[u.invId] = 1; });
+  function list(q){
+    q = (q || '').toLowerCase();
+    var items = DB.inventory.filter(function(i){
+      return !used[i.id] && (!q || [i.name, i.model, i.category, i.location].concat(i.tags || []).join(' ').toLowerCase().indexOf(q) >= 0);
+    });
+    if(!items.length) return '<div class="empty small">' + (DB.inventory.length ? '該当する部品がありません' : '台帳にまだ何も登録されていません') + '</div>';
+    return '<div class="rows">' + items.map(function(i){
+      return '<button type="button" class="row" data-act="usePick" data-id="' + i.id + '"><div class="main"><div class="t">' + esc(i.name) +
+        (i.model ? ' <span class="mono small muted">' + esc(i.model) + '</span>' : '') + '</div><div class="s">' + esc(i.category) + ' ・ 在庫 ' + esc(num(i.qty)) + esc(i.unit || '個') + (i.location ? ' ・ ' + esc(i.location) : '') + '</div></div></button>';
+    }).join('') + '</div>';
+  }
+  openSheet('<h2>備品を台帳から追加</h2>' +
+    '<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input type="search" id="pickQ" placeholder="名前・型番・場所で絞り込み"></div>' +
+    '<div class="pick" id="pickList">' + list('') + '</div>' +
+    '<div class="formbtns"><button type="button" class="btn" data-act="usePickNew">＋ 新しく登録して追加</button><span class="sp"></span><button type="button" class="btn" data-act="closeSheet">閉じる</button></div>',
+    function(root){
+      $('#pickQ', root).addEventListener('input', function(e){ $('#pickList', root).innerHTML = list(e.target.value); });
+    });
+  UI.pickFor = p;
+}
+
+/* ============================================================
+   画面
+   ============================================================ */
+function topbar(html){ $('#topbar').innerHTML = html; }
+function brandBar(extra){
+  topbar('<div class="brand"><i></i>研究デスク</div><span class="sp"></span>' + (extra || '') +
+    '<span class="mono small faint">' + fmtDate(todayISO()) + '</span>');
+}
+
+function viewHome(){
+  brandBar();
+  var ps = DB.projects;
+  if(!ps.length && !DB.inventory.length){
+    return '<div class="card empty" style="margin-top:8px"><div class="big">まだ研究が登録されていません</div>' +
+      '<div>研究ごとに、概要・先行研究・費用と備品・進捗・予定をまとめておけます。<br>手持ちの部品や工具は「部品・工具」タブに記録できます。</div>' +
+      '<div class="btnrow"><button class="btn pri" data-act="projNew">' + I.plus + '研究を追加</button><button class="btn" data-act="loadSample">サンプルで試す</button></div></div>';
+  }
+  var active = ps.filter(function(p){ return p.status === '進行中'; }).length;
+  var total = ps.reduce(function(s, p){ return s + projCost(p); }, 0);
+  var upcoming = allMilestones().filter(function(x){ return !x.m.done && x.m.due && daysUntil(x.m.due) <= 14; })
+    .sort(function(a, b){ return a.m.due < b.m.due ? -1 : 1; });
+
+  var h = '<div class="stats">' +
+    stat('進行中', active, '件') + stat('費用の合計', yen(total)) +
+    stat('2週間以内の予定', upcoming.length, '件') + stat('部品・工具', DB.inventory.length, '品目') + '</div>';
+
+  if(upcoming.length){
+    h += '<div class="sec"><h2>近い予定</h2><span class="sp"></span><a class="lnk" href="#/plan">すべて見る</a></div>' +
+      '<div class="card rows">' + upcoming.slice(0, 5).map(msRow).join('') + '</div>';
+  }
+
+  var counts = { 'すべて': ps.length };
+  STATUSES.forEach(function(s){ counts[s] = ps.filter(function(p){ return p.status === s; }).length; });
+  h += '<div class="sec"><h2>研究</h2></div><div class="chips">' + ['すべて'].concat(STATUSES).map(function(s){
+    return '<button class="chip' + (UI.projFilter === s ? ' on' : '') + '" data-act="projFilter" data-v="' + s + '">' + s + ' <b>' + counts[s] + '</b></button>';
+  }).join('') + '</div>';
+
+  var order = { '進行中':0, '計画中':1, '中断':2, '完了':3 };
+  var list = ps.filter(function(p){ return UI.projFilter === 'すべて' || p.status === UI.projFilter; })
+    .slice().sort(function(a, b){ return (order[a.status] - order[b.status]) || ((b.updatedAt || '') > (a.updatedAt || '') ? 1 : -1); });
+  h += list.length ? '<div class="plist" style="margin-top:8px">' + list.map(projCard).join('') + '</div>'
+    : '<div class="card empty" style="margin-top:8px">この状態の研究はありません</div>';
+  h += '<button class="fab" data-act="projNew">' + I.plus + '研究を追加</button>';
+  return h;
+}
+function stat(k, v, unit){ return '<div class="card stat"><div class="k">' + k + '</div><div class="v">' + esc(v) + (unit ? '<small>' + unit + '</small>' : '') + '</div></div>'; }
+
+function projCard(p){
+  var pr = projProgress(p), nx = nextMilestone(p), dl = nx ? dueLabel(nx.due) : null;
+  return '<a class="card proj" href="#/p/' + p.id + '">' +
+    '<div class="hd"><h3>' + esc(p.title) + '</h3><span class="pill st-' + esc(p.status) + '">' + esc(p.status) + '</span></div>' +
+    (p.summary ? '<div class="sum">' + esc(p.summary) + '</div>' : '<div style="height:10px"></div>') +
+    '<div class="pr"><div class="bar' + (pr >= 100 ? ' done' : '') + '"><i style="width:' + pr + '%"></i></div><span class="n">' + pr + '%</span></div>' +
+    '<div class="meta"><span>' + I.book + p.refs.length + '</span><span>' + I.yen + yen(projCost(p)) + '</span><span>' + I.chip + p.uses.length + '</span>' +
+    (nx ? '<span class="next">' + I.flag + esc(nx.title) + ' <span class="due ' + dl.c + '">' + esc(dl.t) + '</span></span>' : '') +
+    (p.targetDate ? '<span>締切 ' + fmtDate(p.targetDate) + '</span>' : '') + '</div></a>';
+}
+
+function allMilestones(){
+  var out = [];
+  DB.projects.forEach(function(p){ p.milestones.forEach(function(m){ out.push({ p:p, m:m }); }); });
+  return out;
+}
+function msRow(x, showProj){
+  var dl = dueLabel(x.m.due);
+  showProj = showProj !== false;
+  return '<div class="row' + (x.m.done ? ' done' : '') + '">' +
+    '<button class="chk' + (x.m.done ? ' on' : '') + '" data-act="msToggle" data-p="' + x.p.id + '" data-m="' + x.m.id + '" aria-label="完了にする">' + I.check + '</button>' +
+    '<a class="main" style="color:inherit" href="#/p/' + x.p.id + '/plan"><div class="t">' + esc(x.m.title) + '</div>' +
+    (showProj ? '<div class="s">' + esc(x.p.title) + '</div>' : '') + '</a>' +
+    '<span class="due ' + (x.m.done ? '' : dl.c) + '">' + (x.m.done ? '完了 ' + fmtShort(x.m.doneDate) : esc(dl.t)) + '</span></div>';
+}
+
+function viewPlan(){
+  brandBar();
+  var all = allMilestones();
+  var open = all.filter(function(x){ return !x.m.done && x.p.status !== '完了'; })
+    .sort(function(a, b){ return (a.m.due || '9999') < (b.m.due || '9999') ? -1 : 1; });
+  if(!all.length) return '<div class="card empty"><div class="big">予定はまだありません</div>研究の「予定」タブで、節目やタスクを期限つきで登録するとここに集まります。</div>';
+  var groups = [
+    ['期限切れ', function(x){ return x.m.due && daysUntil(x.m.due) < 0; }],
+    ['今週（7日以内）', function(x){ return x.m.due && daysUntil(x.m.due) >= 0 && daysUntil(x.m.due) <= 7; }],
+    ['今月（30日以内）', function(x){ return x.m.due && daysUntil(x.m.due) > 7 && daysUntil(x.m.due) <= 30; }],
+    ['それ以降', function(x){ return x.m.due && daysUntil(x.m.due) > 30; }],
+    ['期限なし', function(x){ return !x.m.due; }]
+  ];
+  var h = '';
+  groups.forEach(function(g){
+    var items = open.filter(g[1]);
+    if(!items.length) return;
+    h += '<div class="sec"><h2>' + g[0] + '</h2><span class="mono small faint">' + items.length + '</span></div><div class="card rows">' + items.map(function(x){ return msRow(x); }).join('') + '</div>';
+  });
+  if(!h) h = '<div class="card empty"><div class="big">未完了の予定はありません</div></div>';
+  var done = all.filter(function(x){ return x.m.done; }).sort(function(a, b){ return (b.m.doneDate || '') > (a.m.doneDate || '') ? 1 : -1; }).slice(0, 10);
+  if(done.length) h += '<div class="sec"><h2>最近完了</h2></div><div class="card rows">' + done.map(function(x){ return msRow(x); }).join('') + '</div>';
+  return h;
+}
+
+var PTABS = [['overview','概要'],['refs','先行研究'],['cost','費用・備品'],['progress','進捗'],['plan','予定']];
+
+function viewProject(p, tab){
+  topbar('<a class="iconbtn" href="#/" aria-label="戻る">' + I.back + '</a><h1>' + esc(p.title) + '</h1>' +
+    '<button class="iconbtn" data-act="projEdit" aria-label="編集">' + I.edit + '</button>');
+  var pr = projProgress(p);
+  var cnt = { refs:p.refs.length, cost:p.expenses.length + p.uses.length, progress:p.logs.length, plan:p.milestones.length };
+  var h = '<div class="card phead"><div class="st"><span class="pill st-' + esc(p.status) + '">' + esc(p.status) + '</span>' +
+    (p.startDate || p.targetDate ? '<span class="mono small muted">' + (p.startDate ? fmtDate(p.startDate) : '') + ' → ' + (p.targetDate ? fmtDate(p.targetDate) : '未定') + '</span>' : '') +
+    (p.targetDate && p.status !== '完了' ? (function(){ var n = daysUntil(p.targetDate); return '<span class="pill plain ' + (n < 0 ? 'bad' : n <= 14 ? 'warn' : '') + '">' + (n < 0 ? (-n) + '日超過' : '締切まで' + n + '日') + '</span>'; })() : '') +
+    '</div><h2>' + esc(p.title) + '</h2>' +
+    '<div class="pr"><div class="bar' + (pr >= 100 ? ' done' : '') + '"><i style="width:' + pr + '%"></i></div><span class="n">' + pr + '%</span></div></div>' +
+    '<div class="seg" role="tablist">' + PTABS.map(function(t){
+      return '<a role="tab" href="#/p/' + p.id + '/' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + (cnt[t[0]] ? '<b>' + cnt[t[0]] + '</b>' : '') + '</a>';
+    }).join('') + '</div>';
+  var body = { overview:tabOverview, refs:tabRefs, cost:tabCost, progress:tabProgress, plan:tabPlan }[tab] || tabOverview;
+  return h + body(p);
+}
+
+function tabOverview(p){
+  var dd = function(label, v){ return '<div><dt>' + label + '</dt><dd' + (v ? '' : ' class="none"') + '>' + (v ? esc(v) : '未記入') + '</dd></div>'; };
+  var h = '<div class="sec"><h2>研究の概要</h2><span class="sp"></span><button class="btn sm" data-act="projEdit">' + I.edit + '編集</button></div>' +
+    '<div class="card"><dl class="dl" style="margin:0">' + dd('概要', p.summary) + dd('研究課題・目的', p.question) + dd('方法・アプローチ', p.method) + dd('成果物・発表先', p.outcome) +
+    '<div><dt>タグ</dt><dd>' + (p.tags.length ? '<div class="tags">' + p.tags.map(function(t){ return '<span class="tag">#' + esc(t) + '</span>'; }).join('') + '</div>' : '<span class="faint">なし</span>') + '</dd></div>' +
+    '</dl></div>';
+  var nx = nextMilestone(p);
+  var lastLog = p.logs.slice().sort(function(a, b){ return (b.date || '') > (a.date || '') ? 1 : -1; })[0];
+  h += '<div class="sec"><h2>ひと目で</h2></div><div class="stats">' +
+    stat('先行研究', p.refs.length, '件') + stat('費用', yen(projCost(p))) + stat('備品', p.uses.length, '点') +
+    stat('予定', p.milestones.filter(function(m){ return m.done; }).length + '/' + p.milestones.length, '完了') + '</div>';
+  if(nx) h += '<div class="sec"><h2>次にやること</h2></div><div class="card rows">' + msRow({ p:p, m:nx }, false) + '</div>';
+  if(lastLog) h += '<div class="sec"><h2>最新の記録</h2><span class="sp"></span><a class="lnk" href="#/p/' + p.id + '/progress">記録をすべて見る</a></div>' +
+    '<div class="card pad"><div class="mono small muted">' + fmtDate(lastLog.date) + '</div><div style="white-space:pre-wrap">' + esc(lastLog.text) + '</div></div>';
+  return h;
+}
+
+function tabRefs(p){
+  var h = '<div class="sec"><h2>先行研究・参考文献</h2><span class="sp"></span>' +
+    (p.refs.length ? '<button class="btn sm ghost" data-act="refCopy">' + I.copy + '一覧をコピー</button>' : '') +
+    '<button class="btn sm pri" data-act="refNew">' + I.plus + '追加</button></div>';
+  if(!p.refs.length) return h + '<div class="card empty">参考にした論文・書籍・記事・データシートを登録しておくと、<br>あとで出典をまとめて書き出せます。<div class="btnrow"><button class="btn pri" data-act="refNew">' + I.plus + '先行研究を追加</button></div></div>';
+  var cls = { '未読':'', '読んだ':'ok', '精読済み':'ok', '引用予定':'acc' };
+  var refs = p.refs.slice().sort(function(a, b){ return (a.year || '9999') < (b.year || '9999') ? -1 : 1; });
+  return h + '<div class="card rows">' + refs.map(function(r){
+    var link = r.doi ? 'https://doi.org/' + r.doi : r.url;
+    return '<div class="row ref" style="align-items:flex-start"><div class="main">' +
+      '<button style="text-align:left" data-act="refEdit" data-id="' + r.id + '"><div class="t">' + esc(r.title) + '</div></button>' +
+      '<div class="s">' + esc(r.authors || '著者不明') + (r.year ? ' <span class="mono">(' + esc(r.year) + ')</span>' : '') + (r.venue ? ' ・ <i>' + esc(r.venue) + '</i>' : '') + '</div>' +
+      (link && /^https?:\/\//.test(link) ? '<div class="links"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + (r.doi ? 'doi:' + esc(r.doi) : '開く ↗') + '</a></div>' : '') +
+      (r.note ? '<div class="note">' + esc(r.note) + '</div>' : '') +
+      '</div><span class="pill ' + (cls[r.status] || '') + '">' + esc(r.status || '未読') + '</span></div>';
+  }).join('') + '</div>';
+}
+
+function tabCost(p){
+  var total = projCost(p);
+  var h = '<div class="sec"><h2>費用</h2><span class="sp"></span><button class="btn sm pri" data-act="expNew">' + I.plus + '記録</button></div>';
+  if(p.expenses.length){
+    var by = {};
+    p.expenses.forEach(function(e){ by[e.category || 'その他'] = (by[e.category || 'その他'] || 0) + (+e.amount || 0); });
+    var cats = Object.keys(by).sort(function(a, b){ return by[b] - by[a]; });
+    var max = by[cats[0]] || 1;
+    var exps = p.expenses.slice().sort(function(a, b){ return (b.date || '') > (a.date || '') ? 1 : -1; });
+    h += '<div class="card"><div class="total"><span class="muted small">合計</span><span class="v">' + yen(total) + '</span><span class="muted small">' + p.expenses.length + '件</span></div>' +
+      '<div class="catbars">' + cats.map(function(c){
+        return '<div class="catbar"><span>' + esc(c) + '</span><div class="bar"><i style="width:' + (by[c] / max * 100) + '%"></i></div><span class="amt">' + yen(by[c]) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="rows" style="border-top:1px solid var(--line-soft)">' + exps.map(function(e){
+        return '<button class="row" data-act="expEdit" data-id="' + e.id + '"><span class="date">' + fmtDate(e.date) + '</span><div class="main"><div class="t">' + esc(e.name) +
+          (e.qty && e.qty != 1 ? ' <span class="mono small muted">×' + esc(e.qty) + '</span>' : '') + '</div><div class="s">' + esc(e.category || '') + (e.shop ? ' ・ ' + esc(e.shop) : '') + (e.invId && getInv(e.invId) ? ' ・ 台帳に登録済み' : '') + '</div></div><span class="amt">' + yen(e.amount) + '</span></button>';
+      }).join('') + '</div></div>';
+  }else{
+    h += '<div class="card empty">部品代・書籍代・交通費など、この研究にかかったお金を記録します。</div>';
+  }
+
+  h += '<div class="sec"><h2>使っている備品</h2><span class="sp"></span><button class="btn sm pri" data-act="useNew">' + I.plus + '台帳から追加</button></div>';
+  if(p.uses.length){
+    h += '<div class="card rows">' + p.uses.map(function(u){
+      var it = getInv(u.invId);
+      if(!it) return '';
+      return '<button class="row" data-act="useEdit" data-id="' + u.id + '"><div class="main"><div class="t">' + esc(it.name) +
+        (it.model ? ' <span class="mono small muted">' + esc(it.model) + '</span>' : '') + '</div><div class="s">' + esc(it.category) + (u.note ? ' ・ ' + esc(u.note) : '') + (it.location ? ' ・ ' + esc(it.location) : '') + '</div></div>' +
+        '<span class="mono" style="font-weight:600">×' + esc(u.qty || 1) + '</span></button>';
+    }).join('') + '</div>';
+  }else{
+    h += '<div class="card empty">「部品・工具」の台帳から、この研究で使うものを選んで紐づけます。<br>費用の記録時に「台帳にも登録」を選ぶと自動で追加されます。</div>';
+  }
+  return h;
+}
+
+function tabProgress(p){
+  var pr = projProgress(p), C = 2 * Math.PI * 40;
+  var auto = p.progressMode !== 'manual';
+  var md = p.milestones.filter(function(m){ return m.done; }).length;
+  var h = '<div class="sec"><h2>進度</h2></div><div class="card"><div class="ring">' +
+    '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="var(--sunken)" stroke-width="10"/>' +
+    '<circle cx="50" cy="50" r="40" fill="none" stroke="' + (pr >= 100 ? 'var(--pcb)' : 'var(--acc)') + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="' + (C * pr / 100) + ' ' + C + '" transform="rotate(-90 50 50)"/></svg>' +
+    '<div style="flex:1;min-width:0"><div class="big" id="prVal">' + pr + '%</div>' +
+    '<div class="lbl">' + (auto ? '予定 ' + md + '/' + p.milestones.length + ' 件の完了から自動計算' : '手動で設定') + '</div>' +
+    '<div class="btnrow" style="margin-top:8px"><button class="chip' + (auto ? ' on' : '') + '" data-act="prMode" data-v="auto">予定から自動</button><button class="chip' + (!auto ? ' on' : '') + '" data-act="prMode" data-v="manual">手動</button></div>' +
+    '</div></div>' +
+    (!auto ? '<div style="padding:0 16px 16px"><input class="range" type="range" min="0" max="100" step="5" value="' + pr + '" data-input="prRange"></div>' : '') +
+    '</div>';
+
+  h += '<div class="sec"><h2>研究の記録</h2><span class="mono small faint">' + p.logs.length + '</span></div>' +
+    '<div class="card"><div class="logadd"><textarea id="logText" placeholder="やったこと・わかったこと・困っていること"></textarea>' +
+    '<div class="btnrow"><input type="date" id="logDate" value="' + todayISO() + '" style="width:auto;flex:1;max-width:190px"><span class="sp" style="flex:1"></span><button class="btn pri" data-act="logAdd">記録する</button></div></div>';
+  var logs = p.logs.slice().sort(function(a, b){ return (b.date || '') > (a.date || '') ? 1 : (b.date === a.date ? ((b.ts || 0) - (a.ts || 0)) : -1); });
+  if(logs.length) h += '<div class="tl">' + logs.map(function(l){
+    return '<div class="it"><div class="d">' + fmtDate(l.date) + '</div><div class="x">' + esc(l.text) + '</div><button data-act="logEdit" data-id="' + l.id + '">編集</button></div>';
+  }).join('') + '</div>';
+  return h + '</div>';
+}
+
+function tabPlan(p){
+  var h = '<div class="sec"><h2>これからの予定</h2><span class="sp"></span><button class="btn sm pri" data-act="msNew">' + I.plus + '追加</button></div>';
+  if(!p.milestones.length) return h + '<div class="card empty">研究の節目（部品選定・試作・計測・解析・まとめ など）を期限つきで並べると、<br>進度が自動で計算されます。<div class="btnrow"><button class="btn pri" data-act="msNew">' + I.plus + '予定を追加</button></div></div>';
+  var ms = p.milestones.slice().sort(function(a, b){
+    if(a.done !== b.done) return a.done ? 1 : -1;
+    return (a.due || '9999') < (b.due || '9999') ? -1 : 1;
+  });
+  return h + '<div class="card rows">' + ms.map(function(m){
+    var dl = dueLabel(m.due);
+    return '<div class="row' + (m.done ? ' done' : '') + '">' +
+      '<button class="chk' + (m.done ? ' on' : '') + '" data-act="msToggle" data-p="' + p.id + '" data-m="' + m.id + '" aria-label="完了にする">' + I.check + '</button>' +
+      '<button class="main" style="text-align:left" data-act="msEdit" data-id="' + m.id + '"><div class="t">' + esc(m.title) + '</div>' + (m.note ? '<div class="s">' + esc(m.note) + '</div>' : '') + '</button>' +
+      '<span class="due ' + (m.done ? '' : dl.c) + '">' + (m.done ? '完了 ' + fmtShort(m.doneDate) : esc(dl.t)) + '</span></div>';
+  }).join('') + '</div>';
+}
+
+/* ---------- 部品・工具 ---------- */
+function isLow(i){ return i.minQty !== '' && i.minQty != null && +i.qty <= +i.minQty; }
+function invFiltered(){
+  var q = UI.invQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  return DB.inventory.filter(function(i){
+    if(UI.invCat !== 'すべて' && i.category !== UI.invCat) return false;
+    if(UI.invLow && !isLow(i)) return false;
+    if(!q.length) return true;
+    var hay = [i.name, i.model, i.category, i.location, i.shop, i.note].concat(i.tags || []).join(' ').toLowerCase();
+    return q.every(function(w){ return hay.indexOf(w) >= 0; });
+  });
+}
+function invListHTML(){
+  var items = invFiltered();
+  if(!DB.inventory.length) return '<div class="card empty" style="margin-top:12px"><div class="big">台帳は空です</div>持っているマイコン・センサ・受動部品・工具・計測器などを、<br>研究で使うかどうかに関わらず登録しておけます。<div class="btnrow"><button class="btn pri" data-act="invNew">' + I.plus + '登録する</button></div></div>';
+  if(!items.length) return '<div class="card empty" style="margin-top:12px">条件に合うものがありません</div>';
+  var groups = {};
+  items.forEach(function(i){ (groups[i.category || 'その他'] = groups[i.category || 'その他'] || []).push(i); });
+  return INV_CATS.concat(Object.keys(groups).filter(function(c){ return INV_CATS.indexOf(c) < 0; })).filter(function(c){ return groups[c]; }).map(function(c){
+    var g = groups[c].sort(function(a, b){ return a.name.localeCompare(b.name, 'ja'); });
+    return '<div class="grp"><h3>' + esc(c) + ' <b>' + g.length + '</b></h3><div class="card rows">' + g.map(function(i){
+      var us = usesOf(i.id), low = isLow(i);
+      return '<div class="row inv"><button class="main" style="text-align:left" data-act="invEdit" data-id="' + i.id + '"><div class="t">' + esc(i.name) + (i.model ? '<small>' + esc(i.model) + '</small>' : '') + '</div>' +
+        '<div class="s">' + [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + esc(i.unit || '個') : '', us.length ? '研究' + us.length + '件で使用' : '', low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ') + '</div></button>' +
+        '<div class="qty"><button data-act="qty" data-id="' + i.id + '" data-d="-1" aria-label="減らす">' + I.minus + '</button><span class="n' + (low ? ' low' : '') + '">' + esc(num(i.qty)) + '<small>' + esc(i.unit || '個') + '</small></span><button data-act="qty" data-id="' + i.id + '" data-d="1" aria-label="増やす">' + I.plus + '</button></div></div>';
+    }).join('') + '</div></div>';
+  }).join('');
+}
+function viewInv(){
+  brandBar();
+  var inv = DB.inventory;
+  var value = inv.reduce(function(s, i){ return s + (+i.price || 0) * (+i.qty || 0); }, 0);
+  var lows = inv.filter(isLow).length;
+  var tools = inv.filter(function(i){ return i.category === '工具' || i.category === '計測器'; }).length;
+  var h = '<div class="stats">' + stat('品目', inv.length) + stat('工具・計測器', tools) + stat('推定金額', yen(value)) + stat('補充したい', lows) + '</div>';
+  h += '<div style="height:14px"></div><div class="search">' + I.search + '<input type="search" id="invQ" placeholder="名前・型番・場所・タグで検索" value="' + esc(UI.invQuery) + '"></div>';
+  var counts = {}; inv.forEach(function(i){ counts[i.category] = (counts[i.category] || 0) + 1; });
+  h += '<div class="chips"><button class="chip' + (UI.invCat === 'すべて' ? ' on' : '') + '" data-act="invCat" data-v="すべて">すべて <b>' + inv.length + '</b></button>' +
+    INV_CATS.filter(function(c){ return counts[c]; }).map(function(c){
+      return '<button class="chip' + (UI.invCat === c ? ' on' : '') + '" data-act="invCat" data-v="' + esc(c) + '">' + esc(c) + ' <b>' + counts[c] + '</b></button>';
+    }).join('') + '</div>';
+  h += '<div class="toolbar"><label class="toggle"><input type="checkbox" data-chg="invLow"' + (UI.invLow ? ' checked' : '') + '>補充したいものだけ</label><span class="sp"></span>' +
+    (inv.length ? '<button class="btn sm ghost" data-act="invCsv">CSV 書き出し</button>' : '') + '</div>';
+  h += '<div id="invList">' + invListHTML() + '</div>';
+  h += '<button class="fab" data-act="invNew">' + I.plus + '登録</button>';
+  return h;
+}
+
+/* ---------- 設定 ---------- */
+function viewSettings(){
+  brandBar();
+  var th = DB.settings.theme || 'auto';
+  var bytes = new Blob([localStorage.getItem(KEY) || '']).size;
+  return '<div class="sec"><h2>表示</h2></div><div class="card">' +
+    '<div class="setrow"><div class="main">テーマ</div><select data-chg="theme">' +
+    [['auto','端末に合わせる'],['light','ライト'],['dark','ダーク']].map(function(o){ return '<option value="' + o[0] + '"' + (th === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+    '</select></div></div>' +
+    '<div class="sec"><h2>データ</h2></div><div class="card">' +
+    '<div class="setrow"><div class="main">バックアップを書き出す<div class="s">研究と台帳をまとめて JSON で保存。機種変更や別の端末への移動にも</div></div><button class="btn sm" data-act="exportJson">書き出す</button></div>' +
+    '<div class="setrow"><div class="main">バックアップから読み込む<div class="s">いまのデータは読み込んだ内容に置き換わります</div></div><button class="btn sm" data-act="importJson">読み込む</button></div>' +
+    '<div class="setrow"><div class="main">費用の一覧を CSV で<div class="s">全研究の費用を 1 つの表に。表計算ソフトで開けます</div></div><button class="btn sm" data-act="expCsv">書き出す</button></div>' +
+    '<div class="setrow"><div class="main">部品・工具の台帳を CSV で</div><button class="btn sm" data-act="invCsv">書き出す</button></div>' +
+    '<div class="setrow"><div class="main">サンプルデータを追加<div class="s">使い方を見るための例を 2 件の研究と台帳に追加します</div></div><button class="btn sm" data-act="loadSample">追加</button></div>' +
+    '<div class="setrow"><div class="main">すべて削除<div class="s mono">使用量 ' + (bytes / 1024).toFixed(1) + ' KB</div></div><button class="btn sm danger" data-act="wipe">削除</button></div>' +
+    '</div>' +
+    '<div class="sec"><h2>このアプリについて</h2></div><div class="card pad small muted">' +
+    'データはこの端末のブラウザ（localStorage）にだけ保存され、どこにも送信されません。先行研究の「読み取る」で DOI を使うときだけ、その DOI を CrossRef の公開 API に問い合わせます。<br>' +
+    'ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出しておくと安心です。</div>';
+}
+
+/* ============================================================
+   ルーティングと描画
+   ============================================================ */
+function parseRoute(){ return location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); }
+function render(keepScroll){
+  var parts = parseRoute(), v = parts[0] || 'home', nav = v, html;
+  if(v === 'p'){
+    var p = getP(parts[1]);
+    if(!p){ location.replace('#/'); return; }
+    UI.cur = p; html = viewProject(p, parts[2] || 'overview'); nav = 'home';
+  }else if(v === 'plan') html = viewPlan();
+  else if(v === 'inv') html = viewInv();
+  else if(v === 'settings') html = viewSettings();
+  else { nav = 'home'; html = viewHome(); }
+  var y = window.scrollY;
+  $('#view').innerHTML = html;
+  document.querySelectorAll('nav.tabs a').forEach(function(a){ a.classList.toggle('on', a.dataset.nav === nav); });
+  if(v === 'inv'){
+    $('#invQ').addEventListener('input', function(e){ UI.invQuery = e.target.value; $('#invList').innerHTML = invListHTML(); });
+  }
+  var key = parts.join('/');
+  if(keepScroll) window.scrollTo(0, y);
+  else if(key !== UI.lastRoute) window.scrollTo(0, 0);
+  UI.lastRoute = key;
+}
+window.addEventListener('hashchange', function(){ closeSheet(); render(false); });
+
+function applyTheme(){
+  var t = DB.settings.theme || 'auto';
+  if(t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+var ACT = {
+  closeSheet: closeSheet,
+  projNew: function(){ projectForm(null); },
+  projEdit: function(){ projectForm(UI.cur); },
+  projFilter: function(el){ UI.projFilter = el.dataset.v; render(true); },
+  refNew: function(){ refForm(UI.cur, null); },
+  refEdit: function(el){ refForm(UI.cur, UI.cur.refs.find(function(r){ return r.id === el.dataset.id; })); },
+  refCopy: function(){
+    var text = UI.cur.refs.slice().sort(function(a, b){ return (a.authors || '').localeCompare(b.authors || ''); }).map(citeLine).join('\n');
+    copyText(text, '文献一覧（' + UI.cur.refs.length + '件）をコピーしました');
+  },
+  expNew: function(){ expenseForm(UI.cur, null); },
+  expEdit: function(el){ expenseForm(UI.cur, UI.cur.expenses.find(function(e){ return e.id === el.dataset.id; })); },
+  useNew: function(){ usePicker(UI.cur); },
+  usePick: function(el){
+    var p = UI.pickFor, it = getInv(el.dataset.id);
+    p.uses.push({ id:uid(), invId:it.id, qty:1, note:'' }); touch(p); save();
+    closeSheet(); render(true); toast('「' + it.name + '」を備品に追加しました');
+  },
+  usePickNew: function(){
+    var p = UI.pickFor; closeSheet();
+    setTimeout(function(){ invForm(null, null, function(item){ p.uses.push({ id:uid(), invId:item.id, qty:item.qty || 1, note:'' }); touch(p); save(); }); }, 240);
+  },
+  useEdit: function(el){ useForm(UI.cur, UI.cur.uses.find(function(u){ return u.id === el.dataset.id; })); },
+  invOpen: function(el){ var it = getInv(el.dataset.id); closeSheet(); setTimeout(function(){ invForm(it); }, 240); },
+  msNew: function(){ milestoneForm(UI.cur, null); },
+  msEdit: function(el){ milestoneForm(UI.cur, UI.cur.milestones.find(function(m){ return m.id === el.dataset.id; })); },
+  msToggle: function(el){
+    var p = getP(el.dataset.p), m = p && p.milestones.find(function(x){ return x.id === el.dataset.m; });
+    if(!m) return;
+    m.done = !m.done; m.doneDate = m.done ? todayISO() : '';
+    touch(p); save(); render(true);
+    if(m.done) toast('完了：' + m.title);
+  },
+  prMode: function(el){ var p = UI.cur; p.progressMode = el.dataset.v; if(p.progressMode === 'manual' && p.progressManual == null) p.progressManual = projProgress(p); touch(p); save(); render(true); },
+  logAdd: function(){
+    var t = $('#logText').value.trim();
+    if(!t){ $('#logText').focus(); return; }
+    UI.cur.logs.push({ id:uid(), date: $('#logDate').value || todayISO(), text:t, ts:Date.now() });
+    touch(UI.cur); save(); render(true); toast('記録しました');
+  },
+  logEdit: function(el){ logForm(UI.cur, UI.cur.logs.find(function(l){ return l.id === el.dataset.id; })); },
+  invNew: function(){ invForm(null, UI.invCat !== 'すべて' ? { category:UI.invCat } : null); },
+  invEdit: function(el){ invForm(getInv(el.dataset.id)); },
+  invCat: function(el){ UI.invCat = el.dataset.v; render(true); },
+  qty: function(el){
+    var it = getInv(el.dataset.id);
+    it.qty = Math.max(0, (+it.qty || 0) + (+el.dataset.d)); save();
+    $('#invList').innerHTML = invListHTML();
+  },
+  exportJson: function(){
+    download('lab-desk-backup-' + todayISO() + '.json', JSON.stringify(DB, null, 2), 'application/json');
+  },
+  importJson: function(){ $('#importFile').click(); },
+  expCsv: function(){
+    var rows = [['研究','日付','品名・内容','区分','数量','金額','購入先','メモ']];
+    DB.projects.forEach(function(p){ p.expenses.forEach(function(e){ rows.push([p.title, e.date, e.name, e.category, e.qty, e.amount, e.shop, e.note]); }); });
+    if(rows.length === 1) return toast('費用の記録がまだありません');
+    download('lab-desk-expenses-' + todayISO() + '.csv', csv(rows), 'text/csv');
+  },
+  invCsv: function(){
+    var rows = [['名前','分類','型番・規格','数量','単位','補充ライン','保管場所','単価','購入日','購入先','URL','タグ','メモ','使っている研究']];
+    DB.inventory.forEach(function(i){
+      rows.push([i.name, i.category, i.model, i.qty, i.unit, i.minQty, i.location, i.price, i.purchased, i.shop, i.url, (i.tags || []).join(' '), i.note,
+        usesOf(i.id).map(function(x){ return x.p.title; }).join(' / ')]);
+    });
+    if(rows.length === 1) return toast('台帳がまだ空です');
+    download('lab-desk-parts-' + todayISO() + '.csv', csv(rows), 'text/csv');
+  },
+  loadSample: function(){ addSample(); save(); location.hash = '#/'; render(false); toast('サンプルを追加しました'); },
+  wipe: function(){
+    if(!confirm('すべての研究と部品・工具の台帳を削除します。よろしいですか？')) return;
+    if(!confirm('本当に削除しますか？ 元に戻せません。')) return;
+    var th = DB.settings.theme; DB = blank(); DB.settings.theme = th; save(); location.hash = '#/'; render(false); toast('削除しました');
+  }
+};
+
+document.addEventListener('click', function(e){
+  var el = e.target.closest('[data-act]');
+  if(!el || !ACT[el.dataset.act]) return;
+  if(el.tagName === 'BUTTON' || el.dataset.act !== 'closeSheet') e.preventDefault();
+  if(el.tagName === 'A' && el.dataset.act === 'closeSheet'){ closeSheet(); return; }
+  ACT[el.dataset.act](el, e);
+});
+document.addEventListener('change', function(e){
+  var k = e.target.dataset.chg;
+  if(k === 'theme'){ DB.settings.theme = e.target.value; save(); applyTheme(); }
+  else if(k === 'invLow'){ UI.invLow = e.target.checked; $('#invList').innerHTML = invListHTML(); }
+  else if(e.target.dataset.input === 'prRange'){ UI.cur.progressManual = +e.target.value; touch(UI.cur); save(); render(true); }
+});
+document.addEventListener('input', function(e){
+  if(e.target.dataset.input === 'prRange') $('#prVal').textContent = e.target.value + '%';
+});
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeSheet(); });
+
+$('#importFile').addEventListener('change', function(e){
+  var f = e.target.files[0]; e.target.value = '';
+  if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    try{
+      var d = JSON.parse(rd.result);
+      if(!d || !d.v || !Array.isArray(d.projects)) throw new Error('形式が違います');
+      if(!confirm('研究 ' + d.projects.length + ' 件・部品 ' + (d.inventory || []).length + ' 品目を読み込み、いまのデータを置き換えます。よろしいですか？')) return;
+      DB = normalize(d); save(); applyTheme(); location.hash = '#/'; render(false); toast('読み込みました');
+    }catch(err){ toast('読み込めませんでした：' + err.message); }
+  };
+  rd.readAsText(f);
+});
+
+function csv(rows){
+  return '﻿' + rows.map(function(r){
+    return r.map(function(c){ c = c == null ? '' : String(c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(',');
+  }).join('\r\n');
+}
+function download(name, text, type){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type:type + ';charset=utf-8' }));
+  a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function copyText(text, msg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast(msg); }, fallback);
+  }else fallback();
+  function fallback(){
+    var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+    try{ document.execCommand('copy'); toast(msg); }catch(e){ toast('コピーできませんでした'); }
+    t.remove();
+  }
+}
+
+/* ============================================================
+   サンプル
+   ============================================================ */
+function addSample(){
+  var inv = function(o){ var it = Object.assign({ id:uid(), unit:'個', tags:[], createdAt:todayISO() }, o); DB.inventory.push(it); return it; };
+  var esp = inv({ name:'ESP32-DevKitC', category:'マイコン・ボード', model:'ESP32-WROOM-32E', qty:2, minQty:1, location:'引き出し A-1', price:1480, purchased:addDays(-40), shop:'秋月電子通商', tags:['Wi-Fi','BLE','3.3V'] });
+  var scd = inv({ name:'CO₂センサーモジュール', category:'センサ', model:'SCD41', qty:1, location:'引き出し A-2', price:5980, purchased:addDays(-38), shop:'スイッチサイエンス', tags:['I2C','3.3V'], note:'起動直後の値は安定まで数分かかる' });
+  var bme = inv({ name:'温湿度・気圧センサー', category:'センサ', model:'BME280', qty:2, location:'引き出し A-2', price:1080, shop:'秋月電子通商', tags:['I2C'] });
+  inv({ name:'Arduino Uno R3', category:'マイコン・ボード', qty:1, location:'引き出し A-1', price:3300 });
+  var oled = inv({ name:'OLED ディスプレイ 0.96インチ', category:'表示・LED', model:'SSD1306 128×64', qty:1, minQty:1, location:'引き出し A-3', price:580, tags:['I2C'] });
+  inv({ name:'LED 5mm 赤', category:'表示・LED', qty:24, minQty:10, location:'部品ケース B', price:10 });
+  inv({ name:'カーボン抵抗セット', category:'受動部品', model:'1/4W 30種×10本', qty:1, unit:'セット', location:'部品ケース B', price:980 });
+  inv({ name:'積層セラミックコンデンサ 0.1µF', category:'受動部品', qty:6, minQty:10, location:'部品ケース B', price:10 });
+  inv({ name:'モータードライバ', category:'モーター・駆動', model:'TB6612FNG', qty:2, location:'引き出し A-4', price:550 });
+  inv({ name:'TTモーター（ギア付き）', category:'モーター・駆動', qty:2, location:'箱 C', price:300 });
+  inv({ name:'フォトリフレクタ', category:'センサ', model:'LBR-127HLD', qty:4, location:'引き出し A-2', price:100 });
+  var bb = inv({ name:'ブレッドボード', category:'基板・ブレッドボード', model:'830穴', qty:3, location:'棚 上段', price:330 });
+  inv({ name:'ジャンパーワイヤ', category:'コネクタ・配線', model:'オス-オス 20cm', qty:1, unit:'袋', location:'部品ケース B', price:220 });
+  inv({ name:'モバイルバッテリー', category:'電源・電池', model:'5V 2.4A 10000mAh', qty:1, location:'棚 上段' });
+  inv({ name:'はんだごて', category:'工具', model:'温調式 FX-600', qty:1, unit:'本', location:'工具箱', price:4000 });
+  inv({ name:'ニッパー', category:'工具', qty:1, unit:'本', location:'工具箱' });
+  inv({ name:'ワイヤーストリッパー', category:'工具', qty:1, unit:'本', location:'工具箱' });
+  inv({ name:'デジタルマルチメーター', category:'計測器', qty:1, unit:'台', location:'棚 中段', price:2500 });
+  inv({ name:'はんだ（鉛フリー 0.8mm）', category:'材料・消耗品', qty:1, minQty:1, unit:'巻', location:'工具箱', price:900 });
+
+  var p1 = {
+    id:uid(), title:'自作CO₂センサーで換気のタイミングを可視化する', status:'進行中', tags:['環境計測','ESP32','IoT'],
+    startDate:addDays(-45), targetDate:addDays(40), progressMode:'auto', progressManual:0, createdAt:new Date().toISOString(),
+    summary:'部屋の CO₂ 濃度を ESP32 と SCD41 で連続計測し、濃度が上がる時間帯と換気の効果をグラフにする。1000ppm を超えたら OLED とブラウザで知らせる。',
+    question:'在室人数や窓の開け方によって、CO₂ 濃度が 1000ppm を超えるまでの時間はどれくらい変わるか。',
+    method:'1分間隔で CO₂・温度・湿度を記録し、Wi-Fi 経由でスプレッドシートに送る。窓の開閉と在室人数は手動でメモ。条件ごとに上昇速度を比較する。',
+    outcome:'学校の自由研究発表、GitHub にコードを公開',
+    refs:[
+      { id:uid(), title:'Is CO2 an Indoor Pollutant? Direct Effects of Low-to-Moderate CO2 Concentrations on Human Decision-Making Performance', authors:'Usha Satish, Mark J. Mendell, Krishnamurthy Shekhar, Toshifumi Hotchi, Douglas Sullivan, Siegfried Streufert, William J. Fisk', year:'2012', venue:'Environmental Health Perspectives', doi:'10.1289/ehp.1104789', status:'読んだ', note:'1000ppm 程度でも意思決定テストの成績が下がったという報告。しきい値を 1000ppm にする根拠に使う。' },
+      { id:uid(), title:'（サンプル）SCD41 データシート', authors:'Sensirion', year:'', venue:'メーカー資料', status:'精読済み', note:'自動自己校正（ASC）の仕組みと、屋外空気に触れさせる必要がある点を確認。' }
+    ],
+    expenses:[
+      { id:uid(), date:addDays(-40), name:'ESP32-DevKitC', category:'電子部品', qty:2, amount:2960, shop:'秋月電子通商', invId:esp.id },
+      { id:uid(), date:addDays(-38), name:'CO₂センサーモジュール SCD41', category:'電子部品', qty:1, amount:5980, shop:'スイッチサイエンス', invId:scd.id },
+      { id:uid(), date:addDays(-38), name:'送料', category:'交通・発送', qty:1, amount:550, shop:'スイッチサイエンス' },
+      { id:uid(), date:addDays(-30), name:'Arduino で始める IoT 入門（書籍）', category:'書籍・文献', qty:1, amount:2640, shop:'書店' },
+      { id:uid(), date:addDays(-12), name:'ケース用アクリル板', category:'材料・消耗品', qty:2, amount:760, shop:'ホームセンター' }
+    ],
+    uses:[
+      { id:uid(), invId:esp.id, qty:1, note:'計測・送信' },
+      { id:uid(), invId:scd.id, qty:1, note:'CO₂ 計測' },
+      { id:uid(), invId:bme.id, qty:1, note:'温湿度の補正用' },
+      { id:uid(), invId:oled.id, qty:1, note:'その場で表示' },
+      { id:uid(), invId:bb.id, qty:1, note:'試作' }
+    ],
+    milestones:[
+      { id:uid(), title:'部品を選んで購入する', due:addDays(-38), done:true, doneDate:addDays(-38) },
+      { id:uid(), title:'ブレッドボードで試作し、値が読めることを確認', due:addDays(-20), done:true, doneDate:addDays(-18) },
+      { id:uid(), title:'スプレッドシートへの自動送信', due:addDays(-3), done:false, note:'HTTPS 送信でたまに失敗する' },
+      { id:uid(), title:'1週間の連続計測', due:addDays(6), done:false },
+      { id:uid(), title:'条件ごとにグラフ化して比較', due:addDays(20), done:false },
+      { id:uid(), title:'発表スライドとレポートをまとめる', due:addDays(36), done:false }
+    ],
+    logs:[
+      { id:uid(), date:addDays(-18), text:'SCD41 の値を I2C で読めた。起動直後は 400ppm 台で、数分で落ち着く。', ts:1 },
+      { id:uid(), date:addDays(-5), text:'Wi-Fi 送信を実装。10回に1回くらいタイムアウトするので、失敗したら次回にまとめて送る方式を検討中。', ts:2 }
+    ]
+  };
+  var p2 = {
+    id:uid(), title:'ライントレースロボットの PID 制御パラメータを比較する', status:'計画中', tags:['ロボット','制御'],
+    startDate:addDays(10), targetDate:addDays(90), progressMode:'auto', progressManual:0, createdAt:new Date().toISOString(),
+    summary:'フォトリフレクタ 4 個でラインを読み、P・PI・PID 制御でコースの周回タイムとはみ出し回数を比べる。',
+    question:'ゲインの組み合わせによって、速さと安定性はどのようにトレードオフになるか。',
+    method:'', outcome:'',
+    refs:[], expenses:[], uses:[], logs:[],
+    milestones:[
+      { id:uid(), title:'シャーシとモーター周りを組む', due:addDays(14), done:false },
+      { id:uid(), title:'テストコースを作る', due:addDays(21), done:false },
+      { id:uid(), title:'P 制御でまず走らせる', due:addDays(30), done:false }
+    ]
+  };
+  touch(p1); touch(p2);
+  DB.projects.unshift(p2); DB.projects.unshift(p1);
+}
+
+/* ============================================================
+   起動
+   ============================================================ */
+applyTheme();
+render(false);
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
