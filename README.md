@@ -68,15 +68,17 @@
 
 Google のログインを使うには、アプリの持ち主の Google Cloud で「OAuth クライアント ID」を発行する必要があります（無料）。
 
-1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作る（名前は例えば ）
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作る（名前は例えば `lab-desk`）
 2. **API とサービス → ライブラリ** で「Google Drive API」を有効にする
 3. **Google Auth Platform（OAuth 同意画面）** を設定する
    - 対象：外部、アプリ名：研究デスク、サポートメール：自分のアドレス
-   - データアクセス（スコープ）： を追加
+   - データアクセス（スコープ）：`https://www.googleapis.com/auth/drive.appdata` を追加
    - 対象ユーザー → テストユーザー：自分の Gmail アドレスを追加（テスト中のままで使えます）
 4. **クライアント → クライアントを作成**
    - 種類：ウェブ アプリケーション
-   - 承認済みの JavaScript 生成元：   - 承認済みのリダイレクト URI：5. 表示された「クライアント ID」（）をアプリの **設定 → 端末間の同期** に貼り付けて保存。 の  に書いておけば、各端末での入力は不要になります
+   - 承認済みの JavaScript 生成元：`https://kuru77.github.io`
+   - 承認済みのリダイレクト URI：`https://kuru77.github.io/lab-desk/`
+5. 表示された「クライアント ID」（`…apps.googleusercontent.com`）をアプリの **設定 → 端末間の同期** に貼り付けて保存。`index.html` の `GOOGLE_CLIENT_ID` に書いておけば、各端末での入力は不要になります
 
 初回ログイン時に「Google はこのアプリを確認していません」と出た場合は、自分で作ったアプリなので「続行」で進めます。
 
