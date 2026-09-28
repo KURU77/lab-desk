@@ -74,7 +74,7 @@
 }
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+html{-webkit-text-size-adjust:100%;touch-action:manipulation;overflow-x:hidden;overscroll-behavior-x:none}
 html,body{margin:0;padding:0}
 body{
   background-color:var(--bg); color:var(--ink);
@@ -86,7 +86,9 @@ body{
   -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
   min-height:100vh;
 }
-body.lock{overflow:hidden}
+body{overflow-x:hidden;overscroll-behavior-x:none}
+/* iOS は body の overflow:hidden だけでは背景が動くので、開いている間は位置ごと固定する */
+body.lock{overflow:hidden;position:fixed;left:0;right:0;width:100%}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
 a{color:var(--acc-ink);text-decoration:none}
@@ -347,12 +349,29 @@ button.row{width:100%;text-align:left}
 
 /* iOS Safari は 16px 未満の入力欄にフォーカスすると画面を拡大するので、入力欄はすべて 16px 以上 */
 input,select,textarea{font-size:16px!important}
+/* 入力欄を列の幅に収める（iOS の日付欄は幅指定を無視して列からはみ出し、シートが横に動く原因になる） */
+.form,.fld,.panel{min-width:0;max-width:100%}
+.fld input,.fld select,.fld textarea{min-width:0;max-width:100%;display:block}
+input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;text-align:left}
+input[type=date]::-webkit-date-and-time-value{text-align:left}
 .paste textarea{font-size:15px}
+
+/* 同期ボタン */
+.iconbtn.sync{margin-right:-8px}
+.iconbtn.sync .ok,.iconbtn.sync .bang{display:none}
+.iconbtn.sync.ok .ok{display:inline;color:var(--pcb)}
+.iconbtn.sync.ok{color:var(--pcb)}
+.iconbtn.sync.syncing{color:var(--acc-ink);animation:pulse 1.2s ease-in-out infinite}
+.iconbtn.sync.login,.iconbtn.sync.error{color:var(--bad)}
+.iconbtn.sync.login .bang,.iconbtn.sync.error .bang{display:inline}
+.iconbtn.sync.offline{color:var(--faint)}
+@keyframes pulse{50%{opacity:.35}}
 
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
-.sheet .panel{position:relative;width:100%;max-width:640px;max-height:92vh;overflow:auto;background:var(--card);
+.sheet{touch-action:pan-y pinch-zoom;overscroll-behavior:contain}
+.sheet .panel{position:relative;width:100%;max-width:640px;max-height:92vh;overflow-x:hidden;overflow-y:auto;touch-action:pan-y pinch-zoom;background:var(--card);
   border-radius:18px 18px 0 0;box-shadow:var(--shadow-lift);transform:translateY(24px);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s;
   padding:8px 18px calc(18px + env(safe-area-inset-bottom));overscroll-behavior:contain}
 .sheet.open .scrim{opacity:1}
@@ -445,7 +464,7 @@ var D_KINDS = ['設計図','回路図','配線図','ブロック図','スケッ�
 var DB = load();
 var UI = { dProj:'すべて', dKind:'すべて', projFilter:'すべて', invQuery:'', invCat:'すべて', invLow:false, lastRoute:'' };
 
-function blank(){ return { v:1, projects:[], inventory:[], designs:[], settings:{ theme:'auto' } }; }
+function blank(){ return { v:1, projects:[], inventory:[], designs:[], deleted:{}, settings:{ theme:'auto' } }; }
 function load(){
   try{
     var d = JSON.parse(localStorage.getItem(KEY));
@@ -464,13 +483,16 @@ function normalize(d){
   });
   d.inventory.forEach(function(it){ if(!Array.isArray(it.tags)) it.tags = []; });
   d.designs = Array.isArray(d.designs) ? d.designs : [];
+  d.deleted = d.deleted && typeof d.deleted === 'object' && !Array.isArray(d.deleted) ? d.deleted : {};
   d.designs.forEach(function(x){ if(!Array.isArray(x.tags)) x.tags = []; });
   delete d.files;
   return d;
 }
 function save(){
+  stampChanges();
   try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
   catch(e){ toast('保存できませんでした（ストレージの空きを確認してください）'); }
+  if(typeof syncSoon === 'function') syncSoon();
 }
 
 /* ============================================================
@@ -534,11 +556,23 @@ var I = {
 /* ============================================================
    シート（フォーム）
    ============================================================ */
+var LOCK_Y = 0;
+function lockScroll(on){
+  var b = document.body;
+  if(on){
+    if(b.classList.contains('lock')) return;
+    LOCK_Y = window.scrollY; b.style.top = (-LOCK_Y) + 'px'; b.classList.add('lock');
+  }else{
+    var sheetOpen = $('#sheet').classList.contains('open'), sketchOpen = !$('#sketch').hidden;
+    if(!b.classList.contains('lock') || sheetOpen || sketchOpen) return;
+    b.classList.remove('lock'); b.style.top = ''; window.scrollTo(0, LOCK_Y);
+  }
+}
 function openSheet(html, onMount){
   var s = $('#sheet');
   $('#sheetBody').innerHTML = html;
   s.hidden = false;
-  document.body.classList.add('lock');
+  lockScroll(true);
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ s.classList.add('open'); }); });
   if(onMount) onMount($('#sheetBody'));
 }
@@ -546,7 +580,7 @@ function closeSheet(){
   var s = $('#sheet');
   if(s.hidden) return;
   s.classList.remove('open');
-  document.body.classList.remove('lock');
+  lockScroll(false);
   setTimeout(function(){ if(!s.classList.contains('open')){ s.hidden = true; $('#sheetBody').innerHTML = ''; } }, 230);
 }
 
@@ -1029,8 +1063,11 @@ function makePending(file){
     });
   });
 }
+var STORING = 0;
 function storePending(pending){
   var id = uid();
+  STORING++;
+  setTimeout(function(){ STORING = Math.max(0, STORING - 1); }, 15000);
   var meta = { id:id, thumb: pending.thumb ? id + '_t' : '', type:pending.type, w:pending.w || 0, h:pending.h || 0, size:pending.size || pending.blob.size, name:pending.name || '' };
   return Promise.all([FILES.put(id, pending.blob), pending.thumb ? FILES.put(id + '_t', pending.thumb) : null]).then(function(){ askPersist(); return meta; });
 }
@@ -1195,7 +1232,7 @@ function openSketch(opts){
   opts = opts || {};
   SK.strokes = []; SK.cur = null; SK.pid = null; SK.bgImg = null; SK.origin = opts.origin || null; SK.projectId = opts.projectId || '';
   $('#skTitle').textContent = opts.origin ? '書き込み：' + opts.origin.title : '手描きスケッチ';
-  $('#sketch').hidden = false; document.body.classList.add('lock');
+  $('#sketch').hidden = false; lockScroll(true);
   $('#skTools').innerHTML = skToolsHTML();
   skUndoState();
   var ready = opts.bgBlob ? loadImg(opts.bgBlob) : Promise.resolve(null);
@@ -1326,7 +1363,7 @@ function skWidth(e){
 })();
 function closeSketch(force){
   if(!force && SK.strokes.length && !confirm('描いた内容を保存せずに閉じますか？')) return;
-  $('#sketch').hidden = true; document.body.classList.remove('lock');
+  $('#sketch').hidden = true; lockScroll(false);
   SK.strokes = []; if(SK.bgImg){ URL.revokeObjectURL(SK.bgImg.src); SK.bgImg = null; }
 }
 function saveSketch(){
@@ -1376,10 +1413,327 @@ $('#designFile').addEventListener('change', function(e){
   }).catch(function(err){ toast(err.message || '読み込めませんでした'); });
 });
 
+/* ============================================================
+   端末間の同期（Google ドライブのアプリ専用領域）
+   ・データは本人の Google ドライブの「アプリ専用フォルダ」（appDataFolder）に置く。
+     ドライブの画面には出ず、このアプリ以外からは見えない。サーバーは使わない。
+   ・レコード（研究・文献・費用・部品・設計図…）ごとに更新時刻 _u を持ち、
+     削除は DB.deleted に墓標（id → 削除時刻）を残す。同期のたびに双方をマージするので、
+     オフラインで別々の端末を編集しても、同じレコードでない限り両方の変更が残る。
+   ・画像は 1 枚ずつ別ファイル（f-<キー>）。画像は書き換えないので、無いほうへ送るだけ。
+   ============================================================ */
+var GOOGLE_CLIENT_ID = '';        // 公開してよい値。設定画面から端末ごとに入れることもできる
+var PROJ_KIDS = ['refs','datasets','expenses','uses','milestones','logs'];
+var SHADOW = {};
+
+/* 各レコードを走査。kids はそのレコードが持つ子レコードの配列名 */
+function eachRecord(db, fn){
+  (db.projects || []).forEach(function(p){
+    fn(p, PROJ_KIDS);
+    PROJ_KIDS.forEach(function(k){ (p[k] || []).forEach(function(c){ fn(c, []); }); });
+  });
+  (db.inventory || []).forEach(function(i){ fn(i, []); });
+  (db.designs || []).forEach(function(d){ fn(d, []); });
+}
+function recSig(rec, kids){
+  var o = {};
+  Object.keys(rec).sort().forEach(function(k){ if(k !== '_u' && kids.indexOf(k) < 0) o[k] = rec[k]; });
+  return JSON.stringify(o);
+}
+function rebuildShadow(){
+  SHADOW = {};
+  eachRecord(DB, function(r, kids){ if(r.id){ if(!r._u) r._u = 1; SHADOW[r.id] = recSig(r, kids); } });
+}
+/* 前回の保存から変わったレコードに時刻を押し、消えたレコードは墓標にする */
+function stampChanges(){
+  var now = Date.now(), seen = {};
+  eachRecord(DB, function(r, kids){
+    if(!r.id) return;
+    seen[r.id] = 1;
+    var sg = recSig(r, kids);
+    if(SHADOW[r.id] !== sg){ r._u = now; SHADOW[r.id] = sg; }
+  });
+  Object.keys(SHADOW).forEach(function(id){
+    if(!seen[id]){ DB.deleted[id] = now; delete SHADOW[id]; }
+  });
+}
+function mergeList(a, b, del, kids){
+  var out = [], byB = {}, used = {};
+  (b || []).forEach(function(r){ if(r && r.id) byB[r.id] = r; });
+  function keep(r){ return !(del[r.id] && del[r.id] >= (r._u || 0)); }
+  function one(x, y){
+    var w = (y && (y._u || 0) > (x._u || 0)) ? y : x;
+    var m = Object.assign({}, w);
+    kids.forEach(function(k){ m[k] = mergeList(x[k] || [], (y && y[k]) || [], del, []); });
+    return m;
+  }
+  (a || []).forEach(function(r){
+    if(!r || !r.id) return;
+    var o = byB[r.id]; used[r.id] = 1;
+    var m = o ? one(r, o) : one(r, null);
+    if(keep(m)) out.push(m);
+  });
+  (b || []).forEach(function(r){
+    if(!r || !r.id || used[r.id]) return;
+    var m = one(r, null);
+    if(keep(m)) out.push(m);
+  });
+  return out;
+}
+function mergeDB(a, b){
+  var del = {};
+  [a.deleted || {}, b.deleted || {}].forEach(function(d){ Object.keys(d).forEach(function(id){ del[id] = Math.max(del[id] || 0, d[id]); }); });
+  return {
+    projects: mergeList(a.projects, b.projects, del, PROJ_KIDS),
+    inventory: mergeList(a.inventory, b.inventory, del, []),
+    designs: mergeList(a.designs, b.designs, del, []),
+    deleted: del
+  };
+}
+function syncPayload(db){
+  var del = {};
+  Object.keys(db.deleted || {}).sort().forEach(function(k){ del[k] = db.deleted[k]; });
+  return JSON.stringify({ v:1, app:'lab-desk', projects:db.projects || [], inventory:db.inventory || [], designs:db.designs || [], deleted:del });
+}
+
+/* ---- 認証（リダイレクト方式。ホーム画面に追加した iPhone でも動く） ---- */
+var SM_KEY = 'lab-desk-sync';
+var SM = (function(){ try{ return JSON.parse(localStorage.getItem(SM_KEY)) || {}; }catch(e){ return {}; } })();
+function saveSM(){ try{ localStorage.setItem(SM_KEY, JSON.stringify(SM)); }catch(e){} }
+function clientId(){ return GOOGLE_CLIENT_ID || SM.clientId || ''; }
+function tokenOK(){ return !!(SM.token && SM.exp && Date.now() < SM.exp); }
+function redirectURI(){ return location.origin + location.pathname.replace(/index\.html$/, ''); }
+function login(silent){
+  if(!clientId()){ location.hash = '#/settings'; return; }
+  var st = uid() + uid();
+  try{ sessionStorage.setItem('lab-desk-oauth', JSON.stringify({ st:st, back: location.hash || '#/', silent: !!silent })); }catch(e){}
+  var q = {
+    client_id: clientId(), redirect_uri: redirectURI(), response_type: 'token',
+    scope: 'https://www.googleapis.com/auth/drive.appdata', include_granted_scopes: 'true', state: st
+  };
+  if(SM.email) q.login_hint = SM.email;
+  if(silent) q.prompt = 'none';
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams(q).toString();
+}
+/* 起動時：Google から戻ってきたところならトークンを受け取る */
+function takeOAuthReturn(){
+  var h = location.hash;
+  if(h.indexOf('access_token=') < 0 && h.indexOf('error=') < 0) return;
+  var q = new URLSearchParams(h.replace(/^#\/?/, ''));
+  var saved = {};
+  try{ saved = JSON.parse(sessionStorage.getItem('lab-desk-oauth')) || {}; sessionStorage.removeItem('lab-desk-oauth'); }catch(e){}
+  if(q.get('state') && q.get('state') === saved.st){
+    if(q.get('access_token')){
+      SM.token = q.get('access_token');
+      SM.exp = Date.now() + (Math.max(60, +q.get('expires_in') || 3600) - 120) * 1000;
+      SM.signedIn = true; SM.needLogin = false; saveSM();
+      SYNC.justLoggedIn = true;
+    }else if(q.get('error')){
+      SM.needLogin = true; saveSM();
+      if(!saved.silent) SYNC.flash = 'ログインできませんでした（' + q.get('error') + '）';
+    }
+  }
+  history.replaceState(null, '', location.pathname + location.search + (saved.back && saved.back.indexOf('access_token') < 0 ? saved.back : '#/'));
+}
+function logout(){
+  if(SM.token) fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(SM.token), { method:'POST', mode:'no-cors' }).catch(function(){});
+  var cid = SM.clientId;
+  SM = { clientId: cid }; saveSM();
+  setSyncState('off');
+}
+
+/* ---- Google ドライブ API ---- */
+var DRIVE = 'https://www.googleapis.com/drive/v3/files', UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
+function gfetch(url, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({ Authorization: 'Bearer ' + SM.token }, opts.headers || {});
+  return fetch(url, opts).then(function(r){
+    if(!r.ok){ var e = new Error('Google ドライブ ' + r.status); e.status = r.status; throw e; }
+    return r;
+  });
+}
+function driveList(){
+  var all = [];
+  function page(tok){
+    var u = DRIVE + '?spaces=appDataFolder&pageSize=1000&fields=' + encodeURIComponent('nextPageToken,files(id,name,createdTime)') + (tok ? '&pageToken=' + encodeURIComponent(tok) : '');
+    return gfetch(u).then(function(r){ return r.json(); }).then(function(j){
+      all = all.concat(j.files || []);
+      return j.nextPageToken ? page(j.nextPageToken) : all;
+    });
+  }
+  return page('');
+}
+function driveGet(id){ return gfetch(DRIVE + '/' + id + '?alt=media'); }
+function driveCreate(name, body, type){
+  var b = 'labdesk' + uid();
+  var meta = JSON.stringify({ name:name, parents:['appDataFolder'] });
+  var blob = new Blob(['--' + b + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + b + '\r\nContent-Type: ' + (type || 'application/octet-stream') + '\r\n\r\n', body, '\r\n--' + b + '--']);
+  return gfetch(UPLOAD + '?uploadType=multipart&fields=id', { method:'POST', headers:{ 'Content-Type':'multipart/related; boundary=' + b }, body:blob }).then(function(r){ return r.json(); });
+}
+function driveUpdate(id, body, type){
+  return gfetch(UPLOAD + '/' + id + '?uploadType=media', { method:'PATCH', headers:{ 'Content-Type': type || 'application/json' }, body:body });
+}
+function driveDelete(id){ return gfetch(DRIVE + '/' + id, { method:'DELETE' }).catch(function(e){ if(e.status !== 404) throw e; }); }
+function driveAbout(){
+  return gfetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)').then(function(r){ return r.json(); });
+}
+
+/* ---- 同期本体 ---- */
+var SYNC = { running:false, again:false, timer:0, state:'off', detail:'' };
+function uiBusy(){ return !$('#sheet').hidden || !$('#sketch').hidden; }
+function setSyncState(st, detail){
+  SYNC.state = st; SYNC.detail = detail || '';
+  var b = $('#syncBtn');
+  if(b){ b.className = 'iconbtn sync ' + st; b.title = syncLabel(); }
+  var el = $('#syncStatus'); if(el) el.textContent = syncLabel();
+}
+function syncLabel(){
+  return {
+    off:'同期していません', ok:'同期済み' + (SM.last ? '（' + agoLabel(SM.last) + '）' : ''), syncing:'同期中…' + (SYNC.detail ? ' ' + SYNC.detail : ''),
+    login:'再ログインが必要です（タップしてログイン）', error:'同期できませんでした：' + SYNC.detail, offline:'オフライン（つながったら同期します）'
+  }[SYNC.state] || '';
+}
+function agoLabel(t){
+  var m = Math.round((Date.now() - t) / 60000);
+  if(m < 1) return 'たった今'; if(m < 60) return m + '分前';
+  var h = Math.round(m / 60); if(h < 24) return h + '時間前';
+  return fmtDate(new Date(t - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+}
+function syncSoon(ms){
+  if(!SM.signedIn || SYNC.applying) return;
+  clearTimeout(SYNC.timer);
+  SYNC.timer = setTimeout(function(){ syncNow(false); }, ms == null ? 3000 : ms);
+}
+function syncNow(interactive){
+  if(!clientId() || !SM.signedIn){ if(interactive) login(false); return Promise.resolve(); }
+  if(!tokenOK()){
+    if(interactive) login(false);
+    else setSyncState('login');
+    return Promise.resolve();
+  }
+  if(!navigator.onLine){ setSyncState('offline'); return Promise.resolve(); }
+  if(SYNC.running){ SYNC.again = true; return Promise.resolve(); }
+  if(uiBusy()){ syncSoon(4000); return Promise.resolve(); }
+  SYNC.running = true; setSyncState('syncing');
+  var changedView = false;
+  return driveList().then(function(files){
+    var jsons = files.filter(function(x){ return x.name === 'lab-desk.json'; });
+    var remote = null, remoteStr = '';
+    return jsons.reduce(function(pr, fl){
+      return pr.then(function(){ return driveGet(fl.id).then(function(r){ return r.json(); }).then(function(d){
+        remote = remote ? Object.assign(mergeDB(remote, d), {}) : d;
+      }); });
+    }, Promise.resolve()).then(function(){
+      if(remote){
+        remoteStr = syncPayload(remote);
+        if(uiBusy()){ var e = new Error('busy'); e.busy = true; throw e; }
+        stampChanges();
+        var m = mergeDB(DB, remote);
+        if(syncPayload(m) !== syncPayload(DB)){
+          SYNC.applying = true;
+          DB.projects = m.projects; DB.inventory = m.inventory; DB.designs = m.designs; DB.deleted = m.deleted;
+          normalize(DB); rebuildShadow(); save();
+          SYNC.applying = false;
+          changedView = true;
+        }
+      }
+      return syncFiles(files).then(function(dl){ if(dl) changedView = true; });
+    }).then(function(){
+      var mine = syncPayload(DB);
+      var w;
+      if(!jsons.length) w = driveCreate('lab-desk.json', mine, 'application/json');
+      else if(mine !== remoteStr || jsons.length > 1) w = driveUpdate(jsons[0].id, mine, 'application/json');
+      return Promise.resolve(w).then(function(){
+        return Promise.all(jsons.slice(1).map(function(x){ return driveDelete(x.id); }));
+      });
+    });
+  }).then(function(){
+    SM.last = Date.now(); saveSM();
+    setSyncState('ok');
+    if(changedView && !uiBusy()) render(true);
+  }).catch(function(e){
+    SYNC.applying = false;
+    if(e.busy){ syncSoon(4000); setSyncState('ok'); }
+    else if(e.status === 401 || e.status === 403){ SM.token = ''; SM.exp = 0; saveSM(); setSyncState('login'); }
+    else if(!navigator.onLine) setSyncState('offline');
+    else setSyncState('error', e.message || '通信エラー');
+  }).then(function(){
+    SYNC.running = false;
+    if(SYNC.again){ SYNC.again = false; syncSoon(500); }
+  });
+}
+/* 画像：無いほうへ送る。どの設計図からも使われなくなったものは片づける */
+function syncFiles(files){
+  var remote = {};
+  files.forEach(function(x){ if(x.name.indexOf('f-') === 0) remote[x.name.slice(2)] = x; });
+  var need = {};
+  DB.designs.forEach(function(d){ if(d.file){ if(d.file.id) need[d.file.id] = 1; if(d.file.thumb) need[d.file.thumb] = 1; } });
+  var downloaded = 0;
+  return FILES.keys().then(function(localKeys){
+    var local = {}; localKeys.forEach(function(k){ local[k] = 1; });
+    var up = Object.keys(need).filter(function(k){ return local[k] && !remote[k]; });
+    var down = Object.keys(need).filter(function(k){ return !local[k] && remote[k]; });
+    var total = up.length + down.length, done = 0;
+    function tick(){ done++; setSyncState('syncing', '画像 ' + done + '/' + total); }
+    var chain = Promise.resolve();
+    up.forEach(function(k){ chain = chain.then(function(){ return FILES.get(k).then(function(b){ return b ? driveCreate('f-' + k, b, b.type) : null; }).then(tick); }); });
+    down.forEach(function(k){ chain = chain.then(function(){ return driveGet(remote[k].id).then(function(r){ return r.blob(); }).then(function(b){ downloaded++; return FILES.put(k, b); }).then(tick); }); });
+    return chain.then(function(){
+      var dayAgo = Date.now() - 864e5;
+      var gcRemote = Object.keys(remote).filter(function(k){ return !need[k] && new Date(remote[k].createdTime).getTime() < dayAgo; });
+      var gcLocal = STORING ? [] : localKeys.filter(function(k){ return !need[k]; });
+      gcLocal.forEach(function(k){ FILES.del(k).catch(function(){}); if(URLS[k]){ URL.revokeObjectURL(URLS[k]); delete URLS[k]; } });
+      return Promise.all(gcRemote.map(function(k){ return driveDelete(remote[k].id); }));
+    }).then(function(){ return downloaded; });
+  });
+}
+function syncStartup(){
+  if(!SM.signedIn || !clientId()) return;
+  if(SYNC.justLoggedIn){
+    SYNC.justLoggedIn = false;
+    driveAbout().then(function(a){ if(a.user){ SM.email = a.user.emailAddress; SM.name = a.user.displayName; saveSM(); render(true); } }).catch(function(){});
+    toast('ログインしました。同期します');
+    syncNow(false);
+    return;
+  }
+  if(tokenOK()){ syncNow(false); return; }
+  /* トークン切れ：オンラインなら Google に黙って取り直しに行く（10分に1回まで） */
+  var last = +(localStorage.getItem('lab-desk-silent') || 0);
+  if(navigator.onLine && !SM.needLogin && Date.now() - last > 10 * 60000){
+    try{ localStorage.setItem('lab-desk-silent', String(Date.now())); }catch(e){}
+    login(true);
+  }else setSyncState('login');
+}
+document.addEventListener('visibilitychange', function(){
+  if(!SM.signedIn) return;
+  if(document.visibilityState === 'visible') syncSoon(300);
+  else if(tokenOK() && !SYNC.running) syncNow(false);
+});
+window.addEventListener('online', function(){ syncSoon(500); });
+
+function syncSettingsHTML(){
+  var cid = clientId();
+  var h = '<div class="sec"><h2>端末間の同期</h2></div><div class="card">';
+  if(!cid){
+    return h + '<div class="setrow"><div class="main">Google アカウントで同期<div class="s">パソコン・iPad・iPhone で同じデータを使えるようにします。データは自分の Google ドライブのアプリ専用領域（ドライブの画面には出ない場所）に保存されます。<br>使うには最初に一度だけ Google Cloud で「OAuth クライアント ID」を作って、ここに入れてください（手順は README）。</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px"><input id="cidIn" placeholder="xxxxxxxx.apps.googleusercontent.com" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--card-2);border-radius:9px;padding:8px 10px">' +
+      '<button class="btn sm pri" data-act="cidSave">保存</button></div></div></div></div>';
+  }
+  if(!SM.signedIn){
+    return h + '<div class="setrow"><div class="main">Google アカウントで同期<div class="s">ログインすると、この端末のデータとクラウドのデータを合わせて、以後は自動で同期します。ほかの端末でも同じアカウントでログインしてください。</div></div><button class="btn sm pri" data-act="syncLogin">Google でログイン</button></div>' +
+      (GOOGLE_CLIENT_ID ? '' : '<div class="setrow"><div class="main"><div class="s mono" style="overflow-wrap:anywhere">クライアント ID：' + esc(cid) + '</div></div><button class="btn sm ghost" data-act="cidClear">変更</button></div>') + '</div>';
+  }
+  return h + '<div class="setrow"><div class="main">' + esc(SM.email || 'Google アカウント') + '<div class="s" id="syncStatus">' + esc(syncLabel()) + '</div></div><button class="btn sm" data-act="syncNow">今すぐ同期</button></div>' +
+    '<div class="setrow"><div class="main"><div class="s">変更は数秒後に自動で送られ、アプリを開いたときに他の端末の変更を取り込みます。ログインの有効期限は約1時間で、切れたら自動で取り直します（できないときは上の表示をタップ）。</div></div></div>' +
+    '<div class="setrow"><div class="main">ログアウト<div class="s">この端末の同期をやめます。データはこの端末にもクラウドにも残ります</div></div><button class="btn sm" data-act="syncLogout">ログアウト</button></div></div>';
+}
+
 function topbar(html){ $('#topbar').innerHTML = html; }
 function brandBar(extra){
   topbar('<div class="brand"><i></i>研究デスク</div><span class="sp"></span>' + (extra || '') +
-    '<span class="mono small faint">' + fmtDate(todayISO()) + '</span>');
+    '<span class="mono small faint">' + fmtDate(todayISO()) + '</span>' +
+    (SM.signedIn ? '<button class="iconbtn sync ' + SYNC.state + '" id="syncBtn" data-act="syncNow" title="' + esc(syncLabel()) + '" aria-label="同期">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.1 4.75 4.75 0 0 0 7 18.5z"/><path class="ok" d="M9.5 13.5l2 2 3.5-3.5"/><path class="bang" d="M12 10.5v3M12 16v.01"/></svg></button>' : ''));
 }
 
 function viewHome(){
@@ -1765,7 +2119,7 @@ function viewSettings(){
   brandBar();
   var th = DB.settings.theme || 'auto';
   var bytes = new Blob([localStorage.getItem(KEY) || '']).size;
-  return '<div class="sec"><h2>表示</h2></div><div class="card">' +
+  return syncSettingsHTML() + '<div class="sec"><h2>表示</h2></div><div class="card">' +
     '<div class="setrow"><div class="main">テーマ</div><select data-chg="theme">' +
     [['auto','端末に合わせる'],['light','ライト'],['dark','ダーク']].map(function(o){ return '<option value="' + o[0] + '"' + (th === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
     '</select></div></div>' +
@@ -1778,7 +2132,7 @@ function viewSettings(){
     '<div class="setrow"><div class="main">すべて削除<div class="s mono" id="usage">記録 ' + (bytes / 1024).toFixed(1) + ' KB</div></div><button class="btn sm danger" data-act="wipe">削除</button></div>' +
     '</div>' +
     '<div class="sec"><h2>このアプリについて</h2></div><div class="card pad small muted">' +
-    'データはこの端末のブラウザ（localStorage と、画像は IndexedDB）にだけ保存され、どこにも送信されません。出典の「読み取る」で DOI を使うときだけ、その DOI を CrossRef / doi.org に問い合わせます。<br>' +
+    'データはこの端末のブラウザ（localStorage と、画像は IndexedDB）に保存されます。同期を使う場合だけ、自分の Google ドライブのアプリ専用領域にも保存され、それ以外には送信されません。出典の「読み取る」で DOI を使うときだけ、その DOI を CrossRef / doi.org に問い合わせます。<br>' +
     'ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出しておくと安心です。</div>';
 }
 
@@ -1835,6 +2189,15 @@ var ACT = {
   dsCopy: function(){
     copyText(UI.cur.datasets.map(datasetCite).join('\n'), 'データセット一覧（' + UI.cur.datasets.length + '件）をコピーしました');
   },
+  syncNow: function(){ if(SYNC.state === 'login' || !tokenOK()) login(false); else syncNow(true); },
+  syncLogin: function(){ login(false); },
+  syncLogout: function(){ if(confirm('この端末の同期をやめますか？（データは消えません）')){ logout(); render(true); toast('ログアウトしました'); } },
+  cidSave: function(){
+    var v = ($('#cidIn').value || '').trim();
+    if(!/\.apps\.googleusercontent\.com$/.test(v)){ toast('「…apps.googleusercontent.com」で終わる ID を入れてください'); return; }
+    SM.clientId = v; saveSM(); render(true); toast('保存しました。ログインしてください');
+  },
+  cidClear: function(){ SM.clientId = ''; saveSM(); render(true); },
   refCopy: function(){
     var text = UI.cur.refs.slice().sort(function(a, b){ return (a.authors || '').localeCompare(b.authors || ''); }).map(citeLine).join('\n');
     copyText(text, '文献一覧（' + UI.cur.refs.length + '件）をコピーしました');
@@ -1932,9 +2295,9 @@ var ACT = {
     sampleDesign(p1).catch(function(){});
   },
   wipe: function(){
-    if(!confirm('すべての研究・設計図・部品と工具の台帳を削除します。よろしいですか？')) return;
+    if(!confirm('すべての研究・設計図・部品と工具の台帳を削除します。' + (SM.signedIn ? '同期している他の端末からも削除されます。' : '') + 'よろしいですか？')) return;
     if(!confirm('本当に削除しますか？ 元に戻せません。')) return;
-    var th = DB.settings.theme; DB = blank(); DB.settings.theme = th; save(); FILES.clear().catch(function(){}); forgetURLs(); location.hash = '#/'; render(false); toast('削除しました');
+    var th = DB.settings.theme, del = DB.deleted; DB = blank(); DB.settings.theme = th; DB.deleted = del; save(); FILES.clear().catch(function(){}); forgetURLs(); location.hash = '#/'; render(false); toast('削除しました');
   }
 };
 
@@ -2146,8 +2509,12 @@ function sampleDesign(p1){
 /* ============================================================
    起動
    ============================================================ */
+takeOAuthReturn();
+rebuildShadow();
 applyTheme();
 render(false);
+if(SYNC.flash) toast(SYNC.flash);
+syncStartup();
 if('serviceWorker' in navigator && location.protocol === 'https:'){
   navigator.serviceWorker.register('sw.js').catch(function(){});
 }
