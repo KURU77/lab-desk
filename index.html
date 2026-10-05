@@ -476,6 +476,12 @@ button.impopt:hover{background:var(--card-2)}
 .impmode input{accent-color:var(--acc);margin-right:6px}
 @media (max-width:420px){ .impgrid{grid-template-columns:1fr} }
 
+/* LaTeX 変換のお知らせ */
+.latexnote{display:flex;gap:10px;align-items:flex-start;background:var(--blue-soft);border-radius:10px;padding:10px 12px;margin:0 0 10px;cursor:pointer}
+.latexnote input{width:18px;height:18px;accent-color:var(--blue);margin-top:2px;flex:none}
+.latexnote b{display:block;font-size:13.5px;color:var(--blue)}
+.latexnote small{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
@@ -541,7 +547,7 @@ button.impopt:hover{background:var(--card-2)}
 <div class="toast" id="toast" role="status"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <input type="file" id="designFile" accept="image/*,application/pdf" hidden>
-<input type="file" id="devFile" accept=".docx,.pdf,.txt,.md,.markdown,.html,.htm,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html" hidden>
+<input type="file" id="devFile" accept=".docx,.pdf,.txt,.md,.markdown,.tex,.html,.htm,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html" hidden>
 
 <div class="lightbox" id="lightbox" hidden><button class="x" data-lb="close" aria-label="閉じる">✕</button><img id="lbImg" alt="" data-lb="zoom"></div>
 
@@ -2296,7 +2302,7 @@ function importSheet(p, devId){
   openSheet('<h2>仕様書・手順書を読み取る</h2>' +
     '<p class="muted small" style="margin:-8px 0 12px">見出し（「仕様」「部品」「手順」「注意」など）、「項目：値」の行、「1.」「①」などの番号を手がかりに振り分けます。記録する前に内容を確認できます。</p>' +
     '<div class="impopts">' +
-      '<button class="impopt" data-act="impFile"><b>ファイルを選ぶ</b><span>Word（.docx）・PDF・テキスト・Markdown・HTML</span></button>' +
+      '<button class="impopt" data-act="impFile"><b>ファイルを選ぶ</b><span>Word（.docx）・PDF・テキスト・Markdown・LaTeX（.tex）・HTML</span></button>' +
       '<div class="impopt"><b>Google ドキュメント</b><span>共有リンク（URL）を貼り付け。初回は Google のログイン画面に移動します</span>' +
         '<div style="display:flex;gap:8px;margin-top:8px"><input id="gdocUrl" placeholder="https://docs.google.com/document/d/…" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--card-2);border-radius:9px;padding:8px 10px"><button class="btn sm pri" data-act="impGdoc">読む</button></div></div>' +
       '<div class="impopt"><b>テキストを貼り付け</b><span>ほかのアプリでコピーした内容をそのまま</span>' +
@@ -2310,6 +2316,7 @@ function readFileKind(f){
   if(/\.docx$/.test(n)) return 'docx';
   if(/\.pdf$/.test(n) || f.type === 'application/pdf') return 'pdf';
   if(/\.html?$/.test(n) || f.type === 'text/html') return 'html';
+  if(/\.tex$/.test(n)) return 'tex';
   if(/\.(txt|md|markdown|csv)$/.test(n) || /^text\//.test(f.type)) return 'text';
   if(/\.doc$/.test(n)) return 'doc';
   return '';
@@ -2317,15 +2324,19 @@ function readFileKind(f){
 function importFile(f){
   var kind = readFileKind(f), imp = UI.devImp || {};
   if(kind === 'doc'){ toast('古い Word 形式（.doc）は読めません。Word で .docx として保存し直してください'); return; }
-  if(!kind){ toast('Word（.docx）・PDF・テキスト・HTML を選んでください'); return; }
+  if(!kind){ toast('Word（.docx）・PDF・テキスト・LaTeX・HTML を選んでください'); return; }
   if(f.size > 30e6){ toast('ファイルが大きすぎます（30MB まで）'); return; }
   toast('読み取り中…');
-  var job = kind === 'docx' ? f.arrayBuffer().then(docxBlocks)
-    : kind === 'pdf' ? f.arrayBuffer().then(pdfBlocks)
-    : f.text().then(function(t){ return kind === 'html' ? htmlBlocks(t) : textBlocks(t, /\.(md|markdown)$/i.test(f.name)); });
-  job.then(function(blocks){
-    var res = analyzeDoc(blocks, f.name);
-    importReview(imp.pid, imp.devId, res, { type: kind === 'text' ? 'text' : kind, name: f.name, size: f.size, blob: f });
+  /* raw = そのまま読んだブロック、pre = LaTeX のソースとして読んだブロック（.tex や LaTeX で書かれたテキスト） */
+  var job = kind === 'docx' ? f.arrayBuffer().then(function(b){ return docxBlocks(b).then(function(raw){ return { raw:raw }; }); })
+    : kind === 'pdf' ? f.arrayBuffer().then(function(b){ return pdfBlocks(b).then(function(raw){ return { raw:raw }; }); })
+    : f.text().then(function(t){
+        if(kind === 'html') return { raw: htmlBlocks(t) };
+        var raw = textBlocks(t, /\.(md|markdown)$/i.test(f.name));
+        return kind === 'tex' || looksLikeLatexSource(t) ? { raw:raw, pre: latexBlocks(t) } : { raw:raw };
+      });
+  job.then(function(r){
+    importAnalyze(imp.pid, imp.devId, r.raw, f.name, { type: kind === 'text' || kind === 'tex' ? 'text' : kind, name: f.name, size: f.size, blob: f }, r.pre);
   }).catch(function(e){ console.error(e); toast('読み取れませんでした：' + (e.message || e)); });
 }
 
@@ -2624,6 +2635,309 @@ function analyzeDoc(blocks, fallbackName){
   return r;
 }
 
+/* ---------- 読み取り：LaTeX の記法をふつうの文字に ----------
+   資料に $V_{CC}=5\,\mathrm{V}$ や \SI{3.3}{\volt}、\begin{tabular} などが書かれていると、
+   そのままではコマンドが文字として入ってしまう。読み取りの段階で読める形に変換する。 */
+var TEX_SYM = {
+  alpha:'α', beta:'β', gamma:'γ', delta:'δ', epsilon:'ε', varepsilon:'ε', zeta:'ζ', eta:'η', theta:'θ', vartheta:'θ', iota:'ι', kappa:'κ',
+  lambda:'λ', mu:'μ', nu:'ν', xi:'ξ', pi:'π', rho:'ρ', sigma:'σ', tau:'τ', upsilon:'υ', phi:'φ', varphi:'φ', chi:'χ', psi:'ψ', omega:'ω',
+  Gamma:'Γ', Delta:'Δ', Theta:'Θ', Lambda:'Λ', Xi:'Ξ', Pi:'Π', Sigma:'Σ', Upsilon:'Υ', Phi:'Φ', Psi:'Ψ', Omega:'Ω',
+  times:'×', pm:'±', mp:'∓', cdot:'·', div:'÷', leq:'≤', le:'≤', leqq:'≦', geq:'≥', ge:'≥', geqq:'≧', neq:'≠', ne:'≠', approx:'≈', simeq:'≃', sim:'〜',
+  equiv:'≡', propto:'∝', infty:'∞', partial:'∂', nabla:'∇', sum:'Σ', prod:'Π', int:'∫', oint:'∮',
+  rightarrow:'→', to:'→', leftarrow:'←', gets:'←', Rightarrow:'⇒', Leftarrow:'⇐', Leftrightarrow:'⇔', leftrightarrow:'↔', uparrow:'↑', downarrow:'↓', mapsto:'↦',
+  ldots:'…', cdots:'⋯', dots:'…', vdots:'⋮', angle:'∠', perp:'⊥', parallel:'∥', in:'∈', notin:'∉', subset:'⊂', supset:'⊃', cup:'∪', cap:'∩',
+  forall:'∀', exists:'∃', therefore:'∴', because:'∵', neg:'¬', land:'∧', lor:'∨', checkmark:'✓', prime:'′', ell:'ℓ', hbar:'ℏ', Re:'ℜ', Im:'ℑ',
+  degree:'°', textdegree:'°', circ:'°', celsius:'℃', textcelsius:'℃', degreeCelsius:'℃', ohm:'Ω', micro:'µ', textmu:'µ', textperthousand:'‰',
+  LaTeX:'LaTeX', TeX:'TeX', textasciitilde:'~', textbackslash:'\\', textbar:'|', textless:'<', textgreater:'>', S:'§', P:'¶', dag:'†', ddag:'‡',
+  copyright:'©', textregistered:'®', texttrademark:'™', bullet:'•', textbullet:'•', quad:'  ', qquad:'    ', enspace:' ', thinspace:' ', space:' ', newline:'\n', par:'\n',
+  lbrace:'{', rbrace:'}', langle:'⟨', rangle:'⟩', lfloor:'⌊', rfloor:'⌋', lceil:'⌈', rceil:'⌉', vert:'|', Vert:'‖', backslash:'\\', setminus:'∖', emptyset:'∅'
+};
+var TEX_UNIT = {
+  volt:'V', ampere:'A', amp:'A', ohm:'Ω', watt:'W', hertz:'Hz', second:'s', meter:'m', metre:'m', gram:'g', kilogram:'kg', newton:'N', pascal:'Pa',
+  joule:'J', coulomb:'C', farad:'F', henry:'H', weber:'Wb', tesla:'T', siemens:'S', kelvin:'K', celsius:'℃', degreeCelsius:'℃', degree:'°', percent:'%',
+  liter:'L', litre:'L', minute:'min', hour:'h', day:'d', decibel:'dB', lux:'lx', lumen:'lm', candela:'cd', mole:'mol', byte:'B', bit:'bit', rpm:'rpm',
+  bar:'bar', mmHg:'mmHg', electronvolt:'eV', angstrom:'Å',
+  kilo:'k', mega:'M', giga:'G', tera:'T', milli:'m', micro:'µ', nano:'n', pico:'p', femto:'f', centi:'c', deci:'d', hecto:'h'
+};
+var TEX_WRAP = /^(textbf|textit|textrm|textsf|texttt|textsc|textup|textmd|textnormal|emph|underline|uline|overline|mbox|hbox|fbox|text|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak|boldsymbol|bm|operatorname|ensuremath|textsuperscript|textsubscript|caption|title|author|date|section|subsection|subsubsection|paragraph|chapter|centerline|small|tiny|large|Large|LARGE|huge|Huge|footnotesize|scriptsize|normalsize|color|textcolor|colorbox|ruby)$/;
+var TEX_DROP = /^(label|index|vspace|hspace|phantom|hphantom|vphantom|usepackage|documentclass|newcommand|renewcommand|providecommand|setlength|addtolength|pagestyle|thispagestyle|bibliographystyle|bibliography|maketitle|tableofcontents|listoffigures|listoftables|centering|raggedright|raggedleft|noindent|indent|newpage|clearpage|pagebreak|linebreak|nopagebreak|bfseries|itshape|ttfamily|rmfamily|sffamily|mdseries|upshape|normalfont|hline|toprule|midrule|bottomrule|cline|cmidrule|addlinespace|left|right|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|displaystyle|textstyle|scriptstyle|limits|nolimits|nonumber|notag|protect|relax|smallskip|medskip|bigskip|vfill|hfill|null|strut|item|begin|end|footnotemark|graphicspath|geometry|lstset|definecolor|setcounter|addcontentsline)$/;
+/* \, \; などの 1 文字コマンド。\\ は改行、\( \) \[ \] は数式の区切りなので消す */
+var TEX_ESC = { ',':' ', ';':' ', ':':' ', ' ':' ', '>':' ', '!':'', '-':'', '\\':'\n', '/':'', '(':'', ')':'', '[':'', ']':'' };
+var SUP_MAP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','−':'⁻','=':'⁼','(':'⁽',')':'⁾','n':'ⁿ','i':'ⁱ' };
+var SUB_MAP = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋','=':'₌','(':'₍',')':'₎' };
+
+function texArg(s, i){
+  /* i から空白を飛ばし、{…} があれば中身と終わりの位置を返す（入れ子に対応） */
+  var j = i;
+  while(j < s.length && (s[j] === ' ' || s[j] === '\t')) j++;
+  if(s[j] !== '{') return null;
+  var depth = 0;
+  for(var k = j; k < s.length; k++){
+    if(s[k] === '\\'){ k++; continue; }
+    if(s[k] === '{') depth++;
+    else if(s[k] === '}'){ depth--; if(!depth) return { arg: s.slice(j + 1, k), end: k + 1 }; }
+  }
+  return { arg: s.slice(j + 1), end: s.length };
+}
+function texOpt(s, i){
+  var j = i;
+  while(j < s.length && s[j] === ' ') j++;
+  if(s[j] !== '[') return null;
+  var k = s.indexOf(']', j);
+  return k < 0 ? null : { arg: s.slice(j + 1, k), end: k + 1 };
+}
+function texSup(a){
+  if(a === '°' || a === '\\circ') return '°';
+  if(a === '\'' || a === '′') return '′';
+  if(a && a.split('').every(function(c){ return SUP_MAP[c]; })) return a.split('').map(function(c){ return SUP_MAP[c]; }).join('');
+  return '^' + (a.length > 1 ? '(' + a + ')' : a);
+}
+function texSub(a){
+  if(a && a.split('').every(function(c){ return SUB_MAP[c]; })) return a.split('').map(function(c){ return SUB_MAP[c]; }).join('');
+  return '_' + (/^[A-Za-z0-9]+$/.test(a) ? a : '(' + a + ')');
+}
+function texUnit(u){
+  /* siunitx の単位：\milli\ampere → mA、\meter\per\second\squared → m/s² */
+  var out = '', pow = '';
+  (u.match(/\\[a-zA-Z]+|[^\\]+/g) || []).forEach(function(tok){
+    if(tok[0] !== '\\'){ out += texConv(tok) + pow; pow = ''; return; }
+    var nm = tok.slice(1);
+    if(nm === 'per'){ out += '/'; return; }
+    if(nm === 'square'){ pow = '²'; return; }
+    if(nm === 'cubic'){ pow = '³'; return; }
+    if(nm === 'squared'){ out += '²'; return; }
+    if(nm === 'cubed'){ out += '³'; return; }
+    out += (TEX_UNIT[nm] || TEX_SYM[nm] || nm) + (TEX_UNIT[nm] && !/^(kilo|mega|giga|tera|milli|micro|nano|pico|femto|centi|deci|hecto)$/.test(nm) ? pow : '');
+    if(TEX_UNIT[nm] && !/^(kilo|mega|giga|tera|milli|micro|nano|pico|femto|centi|deci|hecto)$/.test(nm)) pow = '';
+  });
+  return out.replace(/\s+/g, '');
+}
+function texNum(n){ return texConv(n).replace(/([0-9.]+)\s*[eE]\s*([+-]?\d+)/g, function(_, m, e){ return m + '×10' + texSup(String(+e)); }); }
+
+/* 1 つの文字列の中のコマンドを変換する（$…$ の中も外も同じ扱い） */
+function texConv(s){
+  var out = '', i = 0, m, a, b, o;
+  while(i < s.length){
+    var c = s[i];
+    if(c === '\\'){
+      m = s.slice(i + 1).match(/^([a-zA-Z@]+)\*?|^([\s\S])/);
+      if(!m){ i++; continue; }
+      if(m[2] !== undefined){
+        i += 2;
+        var ch = m[2];
+        out += TEX_ESC[ch] !== undefined ? TEX_ESC[ch] : ch;
+        continue;
+      }
+      var name = m[1];
+      i += 1 + m[0].length;
+      if(name === 'frac' || name === 'dfrac' || name === 'tfrac' || name === 'cfrac'){
+        a = texArg(s, i); b = a && texArg(s, a.end);
+        if(a && b){
+          var x = texConv(a.arg), y = texConv(b.arg), wrap = function(t){ t = t.trim(); return t.length > 1 && !/^[0-9.]+$/.test(t) && !/^\(.*\)$/.test(t) && !/^[A-Za-zα-ωΑ-Ω]((_[A-Za-z0-9]+)|[₀-₉]+)?$/.test(t) ? '(' + t + ')' : t; };
+          out += wrap(x) + '/' + wrap(y); i = b.end;
+        }
+        continue;
+      }
+      if(name === 'sqrt'){
+        o = texOpt(s, i); if(o) i = o.end;
+        a = texArg(s, i);
+        if(a){ var r = texConv(a.arg).trim(); out += (o ? texSup(o.arg) : '') + '√' + (r.length > 1 ? '(' + r + ')' : r); i = a.end; }
+        else out += '√';
+        continue;
+      }
+      if(name === 'SI' || name === 'qty' || name === 'SIrange' || name === 'qtyrange' || name === 'si' || name === 'unit' || name === 'num' || name === 'ang' || name === 'numrange'){
+        o = texOpt(s, i); if(o) i = o.end;
+        var args = [];
+        var need = { SI:2, qty:2, SIrange:3, qtyrange:3, si:1, unit:1, num:1, ang:1, numrange:2 }[name];
+        for(var k = 0; k < need; k++){ a = texArg(s, i); if(!a) break; args.push(a.arg); i = a.end; }
+        if(name === 'SI' || name === 'qty') out += texNum(args[0] || '') + ' ' + texUnit(args[1] || '');
+        else if(name === 'SIrange' || name === 'qtyrange') out += texNum(args[0] || '') + '〜' + texNum(args[1] || '') + ' ' + texUnit(args[2] || '');
+        else if(name === 'numrange') out += texNum(args[0] || '') + '〜' + texNum(args[1] || '');
+        else if(name === 'si' || name === 'unit') out += texUnit(args[0] || '');
+        else if(name === 'num') out += texNum(args[0] || '');
+        else out += texConv(args[0] || '') + '°';
+        continue;
+      }
+      if(name === 'multicolumn' || name === 'multirow'){
+        a = texArg(s, i); b = a && texArg(s, a.end); var cc = b && texArg(s, b.end);
+        if(cc){ out += texConv(cc.arg); i = cc.end; }
+        continue;
+      }
+      if(name === 'href'){ a = texArg(s, i); b = a && texArg(s, a.end); if(b){ out += texConv(b.arg) + '（' + a.arg + '）'; i = b.end; } continue; }
+      if(name === 'url' || name === 'path' || name === 'verb'){ a = texArg(s, i); if(a){ out += a.arg; i = a.end; } continue; }
+      if(name === 'ref' || name === 'eqref' || name === 'autoref' || name === 'cref' || name === 'Cref'){ a = texArg(s, i); if(a){ out += name === 'eqref' ? '(' + a.arg + ')' : a.arg; i = a.end; } continue; }
+      if(name === 'cite' || name === 'citep' || name === 'citet'){ o = texOpt(s, i); if(o) i = o.end; a = texArg(s, i); if(a){ out += '[' + a.arg + ']'; i = a.end; } continue; }
+      if(name === 'footnote'){ a = texArg(s, i); if(a){ out += '（' + texConv(a.arg) + '）'; i = a.end; } continue; }
+      if(name === 'includegraphics'){ o = texOpt(s, i); if(o) i = o.end; a = texArg(s, i); if(a) i = a.end; out += '［図］'; continue; }
+      if(name === 'textcolor' || name === 'colorbox'){ a = texArg(s, i); if(a){ i = a.end; b = texArg(s, i); if(b){ out += texConv(b.arg); i = b.end; } } continue; }
+      if(name === 'color'){ a = texArg(s, i); if(a) i = a.end; continue; }
+      if(name === 'ruby'){ a = texArg(s, i); b = a && texArg(s, a.end); if(b){ out += texConv(a.arg); i = b.end; } continue; }
+      if(name === 'overset' || name === 'underset' || name === 'stackrel'){ a = texArg(s, i); b = a && texArg(s, a.end); if(b){ out += texConv(b.arg); i = b.end; } continue; }
+      if(name === 'mathrm' || name === 'text' || name === 'operatorname' || TEX_WRAP.test(name)){
+        o = texOpt(s, i); if(o && name !== 'text') i = o.end;
+        a = texArg(s, i);
+        if(a){ out += texConv(a.arg); i = a.end; }
+        continue;
+      }
+      /* LaTeX ではコマンド名の直後の空白は無視される（5\times 10 → 5×10） */
+      if(TEX_SYM[name] !== undefined){ out += TEX_SYM[name]; if(s[i] === ' ' && /[A-Za-z0-9]/.test(s[i + 1] || '')) i++; continue; }
+      if(TEX_DROP.test(name)){
+        if(/^(begin|end|cline|cmidrule|usepackage|documentclass|setlength|addtolength|pagestyle|thispagestyle|label|index|vspace|hspace|phantom|hphantom|vphantom|bibliographystyle|bibliography|graphicspath|geometry|lstset|setcounter|definecolor|addcontentsline)$/.test(name)){
+          o = texOpt(s, i); if(o) i = o.end;
+          while((a = texArg(s, i))) { i = a.end; if(!/^(newcommand|definecolor|setlength|addcontentsline|setcounter)$/.test(name)) break; }
+          if(/^(cmidrule)$/.test(name)){ var pr = s.slice(i).match(/^\s*\([^)]*\)/); if(pr) i += pr[0].length; }
+        }
+        if(name === 'item'){ o = texOpt(s, i); if(o){ out += texConv(o.arg) + '：'; i = o.end; } }
+        continue;
+      }
+      /* 知らないコマンド：引数があれば中身だけ残す */
+      a = texArg(s, i);
+      if(a){ out += texConv(a.arg); i = a.end; }
+      continue;
+    }
+    if(c === '^' || c === '_'){
+      i++;
+      if(s[i] === '{'){ a = texArg(s, i); out += (c === '^' ? texSup : texSub)(texConv(a.arg).trim()); i = a.end; }
+      else if(s[i] === '\\'){ m = s.slice(i + 1).match(/^[a-zA-Z]+/); var sym = m ? texConv('\\' + m[0]) : ''; out += c === '^' ? texSup(sym) : texSub(sym); i += 1 + (m ? m[0].length : 0); }
+      else if(i < s.length){ out += (c === '^' ? texSup : texSub)(s[i]); i++; }
+      continue;
+    }
+    if(c === '$'){ i++; continue; }
+    if(c === '{' || c === '}'){ i++; continue; }
+    if(c === '~'){ out += /\d/.test(s[i - 1] || '') && /\d/.test(s[i + 1] || '') ? '〜' : ' '; i++; continue; }
+    out += c; i++;
+  }
+  return out;
+}
+/* 文字列に LaTeX らしい書き方があるときだけ変換する（ふつうの文章の % や ~ は触らない） */
+var TEX_HINT = /\\[a-zA-Z]{2,}|\\[,;:!%&_#$]|\$[^$\n]+\$|\\\(|\\\[|\^\{|_\{/;
+function latexToText(t){
+  t = String(t == null ? '' : t);
+  if(!TEX_HINT.test(t)) return t;
+  return texConv(t).replace(/[ \t\u00a0]{2,}/g, ' ').replace(/ ?\n ?/g, '\n').trim();
+}
+function looksLikeLatexSource(t){
+  return /\\documentclass|\\begin\{document\}/.test(t) || ((t.match(/\\(section|subsection|begin\{(itemize|enumerate|tabular|description)\}|item\b)/g) || []).length >= 3);
+}
+/* LaTeX のソース（または \begin…\end のまとまり）を見出し・箇条書き・表のブロックにする */
+function latexBlocks(src){
+  var s = String(src).replace(/\r\n?/g, '\n').replace(/(^|[^\\])%.*$/gm, '$1');
+  var out = [], title = (s.match(/\\title\s*\{([^{}]*)\}/) || [])[1];
+  var bd = s.indexOf('\\begin{document}');
+  if(bd >= 0){ s = s.slice(bd + 16); var ed = s.indexOf('\\end{document}'); if(ed >= 0) s = s.slice(0, ed); }
+  if(title) out.push({ type:'title', text: latexToText(title) || title });
+  /* 表を先に取り出して印に置き換える */
+  var tables = [];
+  s = s.replace(/\\begin\{(tabular\*?|tabularx|tabulary|longtable|array)\}/g, '\u0001$1\u0001');
+  var parts = s.split('\u0001'), rebuilt = parts[0];
+  for(var pi = 1; pi + 1 < parts.length; pi += 2){
+    var env = parts[pi], rest = parts[pi + 1], endTag = '\\end{' + env + '}', endAt = rest.indexOf(endTag);
+    var body = endAt >= 0 ? rest.slice(0, endAt) : rest, after = endAt >= 0 ? rest.slice(endAt + endTag.length) : '';
+    var nargs = /^(tabular\*|tabularx|tabulary)$/.test(env) ? 2 : 1, p0 = 0, op = texOpt(body, 0);
+    if(op) p0 = op.end;
+    for(var k = 0; k < nargs; k++){ var ag = texArg(body, p0); if(ag) p0 = ag.end; }
+    body = body.slice(p0).replace(/\\(hline|toprule|midrule|bottomrule|endhead|endfirsthead|endfoot|endlastfoot)\b/g, '').replace(/\\(cline|cmidrule)(\([^)]*\))?\{[^}]*\}/g, '');
+    var rows = body.replace(/\\&/g, '\u0002').split(/\\\\(?:\s*\[[^\]]*\])?/).map(function(row){
+      return row.split('&').map(function(cell){ return latexToText(cell.replace(/\u0002/g, '\\&').trim()); });
+    }).filter(function(r){ return r.some(Boolean); });
+    tables.push({ type:'table', rows: rows });
+    rebuilt += '\n\u0003' + (tables.length - 1) + '\u0003\n' + after;
+  }
+  s = rebuilt;
+  /* 見出し・\item・環境の区切りを行の先頭にそろえる */
+  s = s.replace(/\\(chapter|section|subsection|subsubsection|paragraph|item|begin|end)\b/g, '\n\\$1');
+  var lists = [], cur = null, para = [];
+  var flush = function(){
+    if(cur){ var t = latexToText(cur.text); if(t) out.push({ type:'p', text:t, list:true }); cur = null; }
+    if(para.length){
+      var tt = latexToText(para.join('\n').replace(/([^\n])\n(?=[^\n])/g, function(_, x){ return /[A-Za-z0-9,.]$/.test(x) ? x + ' ' : x; }));
+      tt.split('\n').map(function(x){ return x.trim(); }).filter(Boolean).forEach(function(x){ out.push({ type:'p', text:x }); });
+      para = [];
+    }
+  };
+  var mathEnv = null, mathBuf = [];
+  s.split('\n').forEach(function(line){
+    var t = line.trim(), m, a;
+    if(mathEnv){
+      if(t.indexOf('\\end{' + mathEnv + '}') >= 0){ var mt = latexToText(mathBuf.join(' ').replace(/\\\\/g, '\n').replace(/&/g, '')); mt.split('\n').forEach(function(x){ x = x.trim(); if(x) out.push({ type:'p', text:x }); }); mathEnv = null; mathBuf = []; }
+      else mathBuf.push(t);
+      return;
+    }
+    if((m = t.match(/^\u0003(\d+)\u0003$/))){ flush(); out.push(tables[+m[1]]); return; }
+    if(!t){ if(!cur) flush(); return; }
+    if((m = t.match(/^\\(chapter|section|subsection|subsubsection|paragraph)\*?/))){
+      flush();
+      a = texArg(t, m[0].length);
+      var lv = { chapter:1, section:1, subsection:2, subsubsection:3, paragraph:4 }[m[1]];
+      if(a){ out.push({ type:'h', level:lv, text: latexToText(a.arg) || a.arg }); var rest2 = t.slice(a.end).trim(); if(rest2) para.push(rest2); }
+      return;
+    }
+    if((m = t.match(/^\\begin\{([a-zA-Z*]+)\}/))){
+      var env2 = m[1].replace(/\*$/, '');
+      if(/^(itemize|enumerate|description|compactitem|compactenum)$/.test(env2)){ flush(); lists.push({ type:env2, n:0 }); }
+      else if(/^(equation|align|gather|multline|eqnarray|displaymath|math)$/.test(env2)){ flush(); mathEnv = m[1]; var inl = t.slice(m[0].length); if(inl.trim()) mathBuf.push(inl); }
+      var r3 = t.slice(m[0].length).replace(/^\s*(\[[^\]]*\]|\{[^{}]*\})*/, '').trim();
+      if(r3 && !mathEnv) para.push(r3);
+      return;
+    }
+    if((m = t.match(/^\\end\{([a-zA-Z*]+)\}/))){
+      var env3 = m[1].replace(/\*$/, '');
+      if(/^(itemize|enumerate|description|compactitem|compactenum)$/.test(env3)){ flush(); lists.pop(); }
+      var r4 = t.slice(m[0].length).trim(); if(r4) para.push(r4);
+      return;
+    }
+    if((m = t.match(/^\\item\b/))){
+      flush();
+      var L = lists[lists.length - 1] || { type:'itemize', n:0 }, rest = t.slice(m[0].length), op2 = texOpt(rest, 0), lab = '';
+      if(op2){ lab = op2.arg; rest = rest.slice(op2.end); }
+      L.n++;
+      cur = { text: L.type === 'enumerate' || L.type === 'compactenum' ? L.n + '. ' + rest.trim() : (lab ? lab + '：' : '') + rest.trim() };
+      return;
+    }
+    if(cur){ cur.text += ' ' + t; return; }
+    if(/^\\(maketitle|tableofcontents|centering|noindent|clearpage|newpage|caption)\b/.test(t) && !/\\caption/.test(t)) return;
+    para.push(t);
+  });
+  flush();
+  return out;
+}
+/* ほかの形式から読んだブロックに混ざった LaTeX を処理する。段落をまたぐ \begin…\end はまとめて読む */
+function latexPrep(blocks){
+  var out = [], buf = null, env = '', changed = 0;
+  blocks.forEach(function(b){
+    if(b.type === 'table'){
+      var rows = (b.rows || []).map(function(r){ return r.map(function(c){ var n = latexToText(c); if(n !== c) changed++; return n; }); });
+      out.push(Object.assign({}, b, { rows: rows }));
+      return;
+    }
+    var t = String(b.text || '');
+    if(buf){
+      buf.push(t);
+      if(t.indexOf('\\end{' + env + '}') >= 0){ out.push.apply(out, latexBlocks(buf.join('\n'))); changed++; buf = null; }
+      return;
+    }
+    var m = t.match(/\\begin\{([a-zA-Z*]+)\}/);
+    if(m && t.indexOf('\\end{' + m[1] + '}') < 0){ buf = [t]; env = m[1]; return; }
+    if(m || /^\s*\\(chapter|section|subsection|subsubsection|paragraph|item)\b/.test(t)){
+      var lb = latexBlocks(t);
+      if(b.type === 'h' && lb.length === 1 && lb[0].type === 'p') lb[0] = { type:'h', level:b.level, text:lb[0].text };
+      out.push.apply(out, lb); changed++;
+      return;
+    }
+    var nt = latexToText(t);
+    if(nt !== t) changed++;
+    out.push(Object.assign({}, b, { text: nt }));
+  });
+  if(buf){ out.push.apply(out, latexBlocks(buf.join('\n'))); changed++; }
+  return { blocks: out, changed: changed };
+}
+/* 読み取ったブロックを、LaTeX を変換したものと変換しないものの両方で持っておき、確認画面で切り替えられるようにする */
+function importAnalyze(pid, devId, raw, name, src, pre){
+  var conv = pre ? { blocks: pre, changed: Math.max(1, (raw || []).filter(function(b){ return TEX_HINT.test(b.text || ''); }).length) } : latexPrep(raw);
+  UI.impLatex = conv.changed ? { raw: raw, conv: conv.blocks, changed: conv.changed, name: name, on: true } : null;
+  importReview(pid, devId, analyzeDoc(conv.changed ? conv.blocks : raw, name), src);
+}
+
 /* ---------- 読み取り：確認して記録 ---------- */
 function importReview(pid, devId, res, src){
   var p = getP(pid);
@@ -2648,6 +2962,8 @@ function importReview(pid, devId, res, src){
       cnt('備考', res.notes.length, res.notes) +
     '</div>' +
     (d && !empty ? '<div class="impmode"><label><input type="radio" name="impMode" value="append" checked> いまの記録に追記する</label><label><input type="radio" name="impMode" value="replace"> いまの記録を置き換える</label></div>' : '') +
+    (UI.impLatex ? '<label class="latexnote"><input type="checkbox" data-chg="impLatex"' + (UI.impLatex.on ? ' checked' : '') + '><span><b>LaTeX の記法をふつうの文字に変換する</b>' +
+      '<small>資料の中の LaTeX の書き方（数式・単位・表・箇条書きなど）を ' + UI.impLatex.changed + ' か所見つけました。例：$V_{CC}=5\\,\\mathrm{V}$ → V_CC = 5 V、\\SI{3.3}{\\volt} → 3.3 V。外すとコマンドのまま記録します</small></span></label>' : '') +
     '<p class="muted small">記録したあとも、仕様書・手順はそれぞれ編集できます。' + (src.blob ? '元のファイルは装置の「元の資料」に保存されます。' : '') + '</p>' +
     '<div class="formbtns"><span class="sp"></span><button class="btn" data-act="closeSheet">キャンセル</button><button class="btn pri" data-act="impApply"' + (total ? '' : ' disabled') + '>この内容で記録</button></div>');
 }
@@ -2712,8 +3028,7 @@ function importGdoc(pid, devId, url){
       throw new Error('Google ドキュメント ' + r.status + ' ' + msg);
     });
   }).then(function(doc){
-    var res = analyzeDoc(gdocBlocks(doc), doc.title);
-    importReview(pid, devId, res, { type:'gdoc', name: doc.title || 'Google ドキュメント', url: 'https://docs.google.com/document/d/' + m[1] + '/edit' });
+    importAnalyze(pid, devId, gdocBlocks(doc), doc.title, { type:'gdoc', name: doc.title || 'Google ドキュメント', url: 'https://docs.google.com/document/d/' + m[1] + '/edit' });
   }).catch(function(e){ alert(e.message || String(e)); });
 }
 
@@ -3314,7 +3629,7 @@ var ACT = {
     var t = ($('#impPaste').value || '').trim();
     if(!t){ $('#impPaste').focus(); return; }
     var imp = UI.devImp || {};
-    importReview(imp.pid, imp.devId, analyzeDoc(textBlocks(t, /^#\s/m.test(t)), '貼り付けたテキスト'), { type:'paste', name:'貼り付けたテキスト' });
+    importAnalyze(imp.pid, imp.devId, textBlocks(t, /^#\s/m.test(t)), '貼り付けたテキスト', { type:'paste', name:'貼り付けたテキスト' }, looksLikeLatexSource(t) ? latexBlocks(t) : null);
   },
   impGdoc: function(){ var imp = UI.devImp || {}; importGdoc(imp.pid, imp.devId, ($('#gdocUrl').value || '').trim()); },
   impApply: function(){ applyImport(); },
@@ -3445,6 +3760,12 @@ document.addEventListener('click', function(e){
 document.addEventListener('change', function(e){
   var k = e.target.dataset.chg;
   if(k === 'theme'){ DB.settings.theme = e.target.value; save(); applyTheme(); }
+  else if(k === 'impLatex' && UI.impLatex && UI.impRes){
+    UI.impLatex.on = e.target.checked;
+    var xr = UI.impRes, keepName = $('#impName') ? $('#impName').value : '';
+    importReview(xr.pid, xr.devId, analyzeDoc(UI.impLatex.on ? UI.impLatex.conv : UI.impLatex.raw, UI.impLatex.name), xr.src);
+    if(keepName && $('#impName')) $('#impName').value = UI.impLatex.on ? analyzeDoc(UI.impLatex.conv, UI.impLatex.name).name : analyzeDoc(UI.impLatex.raw, UI.impLatex.name).name;
+  }
   else if(k === 'invLow'){ UI.invLow = e.target.checked; $('#invList').innerHTML = invListHTML(); }
   else if(e.target.dataset.input === 'prRange'){ UI.cur.progressManual = +e.target.value; touch(UI.cur); save(); render(true); }
 });
