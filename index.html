@@ -420,6 +420,62 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .ustep.tool.on{background:var(--blue-soft)}
 .ustep.tool.on .n{color:var(--blue)}
 
+/* 自作実験装置 */
+.dev{margin-bottom:12px;overflow:hidden}
+.devhd{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--line-soft)}
+.devhd .main{flex:1;min-width:0}
+.devhd .nm{font-weight:700;font-size:16px;line-height:1.4}
+.devhd .pr{display:flex;align-items:center;gap:8px;margin-top:6px}
+.devhd .pr .bar{flex:1;max-width:220px}
+.devsec{padding:10px 16px 8px;border-bottom:1px solid var(--line-soft)}
+.devsec h3{font-size:12px;letter-spacing:.08em;color:var(--muted);margin:2px 0 8px}
+.devsechd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.devsechd h3{margin:0}
+.devsechd .sp{flex:1}
+.dblock{margin:0 0 10px}
+.dblock b{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+.dblock .pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.warnbox{background:var(--warn-soft);border-radius:9px;padding:8px 10px}
+.warnbox b{color:var(--warn)}
+table.spec{width:100%;border-collapse:collapse;margin:0 0 10px;font-size:14px}
+table.spec th,table.spec td{border-top:1px solid var(--line-soft);padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+table.spec tr:first-child th,table.spec tr:first-child td{border-top:0}
+table.spec th{width:38%;color:var(--muted);font-weight:500;background:var(--card-2)}
+.dlist{margin:2px 0 0;padding-left:20px}
+.dlist li{margin:2px 0;overflow-wrap:anywhere}
+.dlist .pill{height:19px;font-size:10.5px;margin-left:4px;vertical-align:1px}
+ol.steps{list-style:none;margin:0;padding:0}
+ol.steps li{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line-soft)}
+ol.steps li:first-child{border-top:0}
+ol.steps .chk{margin-top:2px}
+ol.steps .main{flex:1;min-width:0;display:flex;gap:8px;text-align:left}
+ol.steps .no{color:var(--acc-ink);font-weight:600;min-width:20px}
+ol.steps .tx{display:grid;gap:2px;min-width:0}
+ol.steps .t{font-weight:500;overflow-wrap:anywhere}
+ol.steps .b{font-size:13px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+ol.steps li.done .t{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--line)}
+ol.steps .mv{display:flex;flex-direction:column;gap:2px;flex:none}
+ol.steps .mv button{width:26px;height:22px;border-radius:6px;color:var(--faint);font-size:12px}
+ol.steps .mv button:hover:not(:disabled){background:var(--sunken);color:var(--ink)}
+ol.steps .mv button:disabled{opacity:.25}
+.srcrow{display:flex;align-items:center;gap:8px;padding:5px 0}
+.srcrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.devft{padding:8px 12px;display:flex;justify-content:flex-end}
+.impopts{display:grid;gap:10px}
+.impopt{display:block;text-align:left;width:100%;border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--card)}
+button.impopt:hover{background:var(--card-2)}
+.impopt b{display:block;font-size:15px}
+.impopt span{display:block;font-size:12.5px;color:var(--muted)}
+.impgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.impcnt{border:1px solid var(--line-soft);border-radius:10px;padding:8px 10px;background:var(--card-2);min-width:0}
+.impcnt b{font-size:12px;color:var(--muted);margin-right:6px}
+.impcnt .mono{font-weight:600}
+.impcnt.zero{opacity:.5}
+.impcnt .pv{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere;line-height:1.5}
+.impmode{display:grid;gap:6px;margin:4px 0 10px;font-size:14px}
+.impmode input{accent-color:var(--acc);margin-right:6px}
+@media (max-width:420px){ .impgrid{grid-template-columns:1fr} }
+
 /* シート */
 .sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet .scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .2s}
@@ -485,6 +541,7 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 <div class="toast" id="toast" role="status"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <input type="file" id="designFile" accept="image/*,application/pdf" hidden>
+<input type="file" id="devFile" accept=".docx,.pdf,.txt,.md,.markdown,.html,.htm,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html" hidden>
 
 <div class="lightbox" id="lightbox" hidden><button class="x" data-lb="close" aria-label="閉じる">✕</button><img id="lbImg" alt="" data-lb="zoom"></div>
 
@@ -530,7 +587,8 @@ function normalize(d){
   d.inventory = Array.isArray(d.inventory) ? d.inventory : [];
   d.settings = d.settings || { theme:'auto' };
   d.projects.forEach(function(p){
-    ['refs','datasets','expenses','uses','milestones','logs','tags'].forEach(function(k){ if(!Array.isArray(p[k])) p[k] = []; });
+    ['refs','datasets','expenses','uses','milestones','logs','tags','devices'].forEach(function(k){ if(!Array.isArray(p[k])) p[k] = []; });
+    p.devices.forEach(normDevice);
     if(!p.status) p.status = '計画中';
     if(!p.progressMode) p.progressMode = 'auto';
     p.uses.forEach(function(u){ if(u.usedN == null) u.usedN = u.used ? (+u.qty || 1) : 0; u.used = +u.usedN > 0; });
@@ -719,7 +777,8 @@ function projectForm(p){
       { k:'summary', label:'概要', type:'textarea', rows:4, ph:'何を・なぜ・どうやって、を数行で' },
       { k:'question', label:'研究課題・目的', type:'textarea', rows:3, ph:'明らかにしたいこと／作りたいもの' },
       { k:'method', label:'方法・アプローチ', type:'textarea', rows:3 },
-      { k:'outcome', label:'成果物・発表先', type:'textarea', rows:2, ph:'レポート、学会、コンテスト、公開リポジトリ など' }
+      { k:'outcome', label:'成果物・発表先', type:'textarea', rows:2, ph:'レポート、学会、コンテスト、公開リポジトリ など' },
+      { k:'needsDevice', label:'自作の実験装置が必要（「装置」タブで仕様書・手順書を記録する）', type:'check' }
     ],
     onSave: function(v){
       if(isNew){
@@ -1737,6 +1796,10 @@ document.addEventListener('keydown', function(e){
   if((e.ctrlKey || e.metaKey) && e.key === 'z'){ e.preventDefault(); SK.strokes.pop(); skRedraw(); }
 });
 
+$('#devFile').addEventListener('change', function(e){
+  var f = e.target.files[0]; e.target.value = '';
+  if(f) importFile(f);
+});
 $('#designFile').addEventListener('change', function(e){
   var f = e.target.files[0]; e.target.value = '';
   if(!f) return;
@@ -1758,7 +1821,7 @@ $('#designFile').addEventListener('change', function(e){
    ・画像は 1 枚ずつ別ファイル（f-<キー>）。画像は書き換えないので、無いほうへ送るだけ。
    ============================================================ */
 var GOOGLE_CLIENT_ID = '1088975026923-gg6ra210l32ql6g7hllg6i11qei8agm9.apps.googleusercontent.com';        // 公開してよい値。設定画面から端末ごとに入れることもできる
-var PROJ_KIDS = ['refs','datasets','expenses','uses','milestones','logs'];
+var PROJ_KIDS = ['refs','datasets','expenses','uses','milestones','logs','devices'];
 var SHADOW = {};
 
 /* 各レコードを走査。kids はそのレコードが持つ子レコードの配列名 */
@@ -1838,13 +1901,14 @@ function saveSM(){ try{ localStorage.setItem(SM_KEY, JSON.stringify(SM)); }catch
 function clientId(){ return GOOGLE_CLIENT_ID || SM.clientId || ''; }
 function tokenOK(){ return !!(SM.token && SM.exp && Date.now() < SM.exp); }
 function redirectURI(){ return location.origin + location.pathname.replace(/index\.html$/, ''); }
-function login(silent){
+function login(silent, opt){
+  opt = opt || {};
   if(!clientId()){ location.hash = '#/settings'; return; }
   var st = uid() + uid();
-  try{ sessionStorage.setItem('lab-desk-oauth', JSON.stringify({ st:st, back: location.hash || '#/', silent: !!silent })); }catch(e){}
+  try{ sessionStorage.setItem('lab-desk-oauth', JSON.stringify({ st:st, back: location.hash || '#/', silent: !!silent, purpose: opt.purpose || 'sync', pending: opt.pending || null })); }catch(e){}
   var q = {
     client_id: clientId(), redirect_uri: redirectURI(), response_type: 'token',
-    scope: 'https://www.googleapis.com/auth/drive.appdata', include_granted_scopes: 'true', state: st
+    scope: opt.scope || 'https://www.googleapis.com/auth/drive.appdata', include_granted_scopes: 'true', state: st
   };
   if(SM.email) q.login_hint = SM.email;
   if(silent) q.prompt = 'none';
@@ -1859,10 +1923,20 @@ function takeOAuthReturn(){
   try{ saved = JSON.parse(sessionStorage.getItem('lab-desk-oauth')) || {}; sessionStorage.removeItem('lab-desk-oauth'); }catch(e){}
   if(q.get('state') && q.get('state') === saved.st){
     if(q.get('access_token')){
-      SM.token = q.get('access_token');
-      SM.exp = Date.now() + (Math.max(60, +q.get('expires_in') || 3600) - 120) * 1000;
-      SM.signedIn = true; SM.needLogin = false; saveSM();
-      SYNC.justLoggedIn = true;
+      var tok = q.get('access_token'), exp = Date.now() + (Math.max(60, +q.get('expires_in') || 3600) - 120) * 1000, scopes = q.get('scope') || '';
+      if(scopes.indexOf('documents') >= 0){ SM.docsToken = tok; SM.docsExp = exp; }
+      if(saved.purpose === 'docs'){
+        /* Google ドキュメントの読み取り用。同期中ならトークンを同期にも使う */
+        if(SM.signedIn && scopes.indexOf('drive.appdata') >= 0){ SM.token = tok; SM.exp = exp; }
+        saveSM();
+        SYNC.resumeDocs = saved.pending;
+      }else{
+        SM.token = tok; SM.exp = exp;
+        SM.signedIn = true; SM.needLogin = false; saveSM();
+        SYNC.justLoggedIn = true;
+      }
+    }else if(q.get('error') && saved.purpose === 'docs'){
+      SYNC.flash = 'Google ドキュメントの読み取りが許可されませんでした（' + q.get('error') + '）';
     }else if(q.get('error')){
       SM.needLogin = true; saveSM();
       if(!saved.silent) SYNC.flash = 'ログインできませんでした（' + q.get('error') + '）';
@@ -2003,6 +2077,7 @@ function syncFiles(files){
   files.forEach(function(x){ if(x.name.indexOf('f-') === 0) remote[x.name.slice(2)] = x; });
   var need = {};
   DB.designs.forEach(function(d){ if(d.file){ if(d.file.id) need[d.file.id] = 1; if(d.file.thumb) need[d.file.thumb] = 1; } });
+  DB.projects.forEach(function(p){ (p.devices || []).forEach(function(d){ (d.sources || []).forEach(function(x){ if(x.fileId) need[x.fileId] = 1; }); }); });
   var downloaded = 0;
   return FILES.keys().then(function(localKeys){
     var local = {}; localKeys.forEach(function(k){ local[k] = 1; });
@@ -2061,6 +2136,585 @@ function syncSettingsHTML(){
   return h + '<div class="setrow"><div class="main">' + esc(SM.email || 'Google アカウント') + '<div class="s" id="syncStatus">' + esc(syncLabel()) + '</div></div><button class="btn sm" data-act="syncNow">今すぐ同期</button></div>' +
     '<div class="setrow"><div class="main"><div class="s">変更は数秒後に自動で送られ、アプリを開いたときに他の端末の変更を取り込みます。ログインの有効期限は約1時間で、切れたら自動で取り直します（できないときは上の表示をタップ）。</div></div></div>' +
     '<div class="setrow"><div class="main">ログアウト<div class="s">この端末の同期をやめます。データはこの端末にもクラウドにも残ります</div></div><button class="btn sm" data-act="syncLogout">ログアウト</button></div></div>';
+}
+
+/* ============================================================
+   自作実験装置：仕様書と手順書
+   p.needsDevice = true の研究に「装置」タブを出す。
+   p.devices = [{ id, name, purpose, specs:[{k,v}], parts, tools, safety, notes,
+                  steps:[{id,title,body,done}], sources:[{id,name,type,size,fileId,url,importedAt}] }]
+   parts / tools は 1 行 1 項目のテキスト。元ファイルは FILES（IndexedDB）に保存して同期する。
+   ============================================================ */
+var PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
+var DOCS_SCOPE = 'https://www.googleapis.com/auth/documents.readonly';
+
+function ptabsOf(p){
+  return p.needsDevice ? [PTABS[0], ['device','装置']].concat(PTABS.slice(1)) : PTABS;
+}
+function getDev(p, id){ return (p.devices || []).find(function(d){ return d.id === id; }); }
+function blankDevice(name){
+  return { id:uid(), name: name || '自作実験装置', purpose:'', specs:[], parts:'', tools:'', safety:'', notes:'', steps:[], sources:[], createdAt:new Date().toISOString() };
+}
+function normDevice(d){
+  ['specs','steps','sources'].forEach(function(k){ if(!Array.isArray(d[k])) d[k] = []; });
+  ['purpose','parts','tools','safety','notes'].forEach(function(k){ if(d[k] == null) d[k] = ''; });
+  d.steps.forEach(function(s){ if(!s.id) s.id = uid(); });
+}
+function lines(t){ return String(t || '').split('\n').map(function(x){ return x.trim(); }).filter(Boolean); }
+function specsToText(specs){ return (specs || []).map(function(s){ return s.k ? s.k + '：' + s.v : s.v; }).join('\n'); }
+function textToSpecs(t){
+  return lines(t).map(function(l){
+    var m = l.match(/^([^:：]{1,30})[:：]\s*(.*)$/);
+    return m && !/^https?$/i.test(m[1]) ? { k:m[1].trim(), v:m[2].trim() } : { k:'', v:l };
+  });
+}
+
+/* ---------- 画面 ---------- */
+function tabDevice(p){
+  var ds = p.devices || [];
+  var h = '<div class="sec"><h2>自作実験装置</h2><span class="sp"></span>' +
+    (ds.length ? '<button class="btn sm" data-act="devImport" data-dev="">読み取る</button><button class="btn sm pri" data-act="devNew">' + I.plus + '装置</button>' : '') + '</div>';
+  if(!ds.length){
+    return h + '<div class="card empty"><div class="big">装置の仕様書と手順書を記録します</div>' +
+      '手で入力するか、手元の仕様書・手順書（Word・PDF・テキスト・Google ドキュメント）を読み取って自動で入力できます。' +
+      '<div class="btnrow"><button class="btn pri" data-act="devImport" data-dev="">ファイルから読み取る</button><button class="btn" data-act="devNew">手で入力する</button></div></div>';
+  }
+  return h + ds.map(function(d){ return deviceCard(p, d); }).join('');
+}
+function deviceCard(p, d){
+  normDevice(d);
+  var done = d.steps.filter(function(s){ return s.done; }).length, n = d.steps.length;
+  var parts = lines(d.parts), tools = lines(d.tools);
+  var invMark = function(x){
+    var id = matchInv(x.replace(/\s*[×x＊*]\s*\d+.*$/, '').replace(/[（(].*?[)）]/g, ''));
+    var it = id && getInv(id);
+    return it ? ' <span class="pill ok plain" title="部品リストにあります">手元に ' + num(unusedQty(it)) + esc(it.unit || '個') + '</span>' : '';
+  };
+  var h = '<div class="card dev"><div class="devhd"><div class="main"><div class="nm">' + esc(d.name || '自作実験装置') + '</div>' +
+    (n ? '<div class="pr"><div class="bar' + (done >= n ? ' done' : '') + '"><i style="width:' + Math.round(done / n * 100) + '%"></i></div><span class="mono small">手順 ' + done + '/' + n + '</span></div>' : '') + '</div>' +
+    '<button class="btn sm" data-act="devEdit" data-dev="' + d.id + '">' + I.edit + '仕様書</button></div>';
+
+  // 仕様書
+  h += '<div class="devsec"><h3>仕様書</h3>';
+  h += d.purpose ? '<div class="dblock"><b>目的・用途</b><div class="pre">' + esc(d.purpose) + '</div></div>' : '';
+  h += d.specs.length ? '<table class="spec"><tbody>' + d.specs.map(function(s){
+    return s.k ? '<tr><th>' + esc(s.k) + '</th><td>' + esc(s.v) + '</td></tr>' : '<tr><td colspan="2">' + esc(s.v) + '</td></tr>';
+  }).join('') + '</tbody></table>' : '';
+  h += parts.length ? '<div class="dblock"><b>使う部品・材料（' + parts.length + '）</b><ul class="dlist">' + parts.map(function(x){ return '<li>' + esc(x) + invMark(x) + '</li>'; }).join('') + '</ul></div>' : '';
+  h += tools.length ? '<div class="dblock"><b>使う工具・機器（' + tools.length + '）</b><ul class="dlist">' + tools.map(function(x){ return '<li>' + esc(x) + invMark(x) + '</li>'; }).join('') + '</ul></div>' : '';
+  h += d.safety ? '<div class="dblock warnbox"><b>安全上の注意</b><div class="pre">' + esc(d.safety) + '</div></div>' : '';
+  h += d.notes ? '<div class="dblock"><b>備考</b><div class="pre">' + esc(d.notes) + '</div></div>' : '';
+  if(!d.purpose && !d.specs.length && !parts.length && !tools.length && !d.safety && !d.notes){
+    h += '<div class="muted small" style="padding:4px 0 8px">まだ記入されていません。「仕様書」から入力するか、ファイルを読み取ってください。</div>';
+  }
+  h += '</div>';
+
+  // 手順書
+  h += '<div class="devsec"><div class="devsechd"><h3>手順書</h3><span class="sp"></span><button class="btn sm" data-act="stepNew" data-dev="' + d.id + '">' + I.plus + '手順</button></div>';
+  h += n ? '<ol class="steps">' + d.steps.map(function(s, i){
+    return '<li class="' + (s.done ? 'done' : '') + '"><button class="chk' + (s.done ? ' on' : '') + '" data-act="stepToggle" data-dev="' + d.id + '" data-step="' + s.id + '" aria-label="できた">' + I.check + '</button>' +
+      '<button class="main" data-act="stepEdit" data-dev="' + d.id + '" data-step="' + s.id + '"><span class="no mono">' + (i + 1) + '</span><span class="tx"><span class="t">' + esc(s.title) + '</span>' + (s.body ? '<span class="b">' + esc(s.body) + '</span>' : '') + '</span></button>' +
+      '<span class="mv"><button data-act="stepMove" data-dev="' + d.id + '" data-step="' + s.id + '" data-d="-1" aria-label="上へ"' + (i ? '' : ' disabled') + '>↑</button><button data-act="stepMove" data-dev="' + d.id + '" data-step="' + s.id + '" data-d="1" aria-label="下へ"' + (i < n - 1 ? '' : ' disabled') + '>↓</button></span></li>';
+  }).join('') + '</ol>' : '<div class="muted small" style="padding:4px 0 8px">手順はまだありません。</div>';
+  h += '</div>';
+
+  // 元ファイル
+  h += '<div class="devsec"><div class="devsechd"><h3>元の資料</h3><span class="sp"></span><button class="btn sm" data-act="devImport" data-dev="' + d.id + '">読み取る</button></div>';
+  h += d.sources.length ? d.sources.map(function(s){
+    return '<div class="srcrow"><span class="pill plain">' + esc({ docx:'Word', pdf:'PDF', gdoc:'Google', text:'テキスト', html:'HTML', paste:'貼り付け' }[s.type] || s.type) + '</span>' +
+      '<span class="nm">' + esc(s.name) + '</span><span class="mono small faint">' + (s.importedAt ? fmtShort(s.importedAt) : '') + '</span>' +
+      (s.fileId || s.url ? '<button class="btn sm ghost" data-act="srcOpen" data-dev="' + d.id + '" data-src="' + s.id + '">開く</button>' : '') +
+      '<button class="btn sm ghost" data-act="srcDel" data-dev="' + d.id + '" data-src="' + s.id + '" aria-label="削除">✕</button></div>';
+  }).join('') : '<div class="muted small" style="padding:2px 0 6px">読み取った Word・PDF などはここに保存されます。</div>';
+  h += '</div>';
+  h += '<div class="devft"><button class="btn sm ghost" data-act="devCopy" data-dev="' + d.id + '">' + I.copy + 'テキストでコピー</button></div></div>';
+  return h;
+}
+
+function deviceForm(p, d){
+  var isNew = !d;
+  formSheet({
+    title: isNew ? '自作実験装置を追加' : '仕様書を編集',
+    values: d ? Object.assign({}, d, { specsText: specsToText(d.specs) }) : null,
+    fields: [
+      { k:'name', label:'装置名', req:true, ph:'例：CO₂ ロガー 試作1号' },
+      { k:'purpose', label:'目的・用途', type:'textarea', rows:3, ph:'何を測る・作るための装置か' },
+      { k:'specsText', label:'仕様（1行に1つ「項目：値」）', type:'textarea', rows:6, ph:'測定範囲：400〜5000ppm\n電源：USB 5V\n外形：120×80×40mm' },
+      { k:'parts', label:'使う部品・材料（1行に1つ）', type:'textarea', rows:4, ph:'ESP32-DevKitC ×1\nSCD41 ×1', hint:'部品リストにあるものは「手元に◯個」と表示されます' },
+      { k:'tools', label:'使う工具・機器（1行に1つ）', type:'textarea', rows:3, ph:'はんだごて\nテスター' },
+      { k:'safety', label:'安全上の注意', type:'textarea', rows:2 },
+      { k:'notes', label:'備考', type:'textarea', rows:2 }
+    ],
+    onSave: function(v){
+      var specs = textToSpecs(v.specsText); delete v.specsText;
+      if(!Array.isArray(p.devices)) p.devices = [];
+      if(isNew){ d = blankDevice(v.name); p.devices.push(d); }
+      Object.assign(d, v, { specs:specs });
+      touch(p); save(); render(true);
+    },
+    onDelete: isNew ? null : function(){
+      (d.sources || []).forEach(function(s){ if(s.fileId) dropFile({ id:s.fileId }); });
+      p.devices = p.devices.filter(function(x){ return x !== d; });
+      touch(p); save(); render(true);
+    },
+    delLabel: 'この装置を削除', delConfirm: '「' + (d ? d.name : '') + '」の仕様書・手順書・元の資料をすべて削除しますか？'
+  });
+}
+function stepForm(p, d, s){
+  var isNew = !s;
+  formSheet({
+    title: isNew ? '手順を追加' : '手順 ' + (d.steps.indexOf(s) + 1),
+    values: s,
+    fields: [
+      { k:'title', label:'やること', req:true, ph:'例：SCD41 を I2C でつなぐ' },
+      { k:'body', label:'詳しい説明・ポイント', type:'textarea', rows:5, ph:'配線、寸法、設定値、注意点 など' },
+      { k:'done', label:'できた', type:'check' }
+    ],
+    onSave: function(v){
+      if(isNew) d.steps.push(Object.assign({ id:uid() }, v));
+      else Object.assign(s, v);
+      touch(p); save(); render(true);
+    },
+    onDelete: isNew ? null : function(){ d.steps = d.steps.filter(function(x){ return x !== s; }); touch(p); save(); render(true); }
+  });
+}
+function deviceText(d){
+  var out = ['# ' + (d.name || '自作実験装置'), ''];
+  if(d.purpose) out.push('## 目的・用途', d.purpose, '');
+  if(d.specs.length) out.push('## 仕様', d.specs.map(function(s){ return '- ' + (s.k ? s.k + '：' + s.v : s.v); }).join('\n'), '');
+  if(lines(d.parts).length) out.push('## 使う部品・材料', lines(d.parts).map(function(x){ return '- ' + x; }).join('\n'), '');
+  if(lines(d.tools).length) out.push('## 使う工具・機器', lines(d.tools).map(function(x){ return '- ' + x; }).join('\n'), '');
+  if(d.safety) out.push('## 安全上の注意', d.safety, '');
+  if(d.steps.length) out.push('## 手順', d.steps.map(function(s, i){ return (i + 1) + '. ' + s.title + (s.body ? '\n   ' + s.body.replace(/\n/g, '\n   ') : ''); }).join('\n'), '');
+  if(d.notes) out.push('## 備考', d.notes, '');
+  return out.join('\n').trim();
+}
+
+/* ---------- 読み取り：入口 ---------- */
+function importSheet(p, devId){
+  UI.devImp = { pid:p.id, devId:devId || '' };
+  openSheet('<h2>仕様書・手順書を読み取る</h2>' +
+    '<p class="muted small" style="margin:-8px 0 12px">見出し（「仕様」「部品」「手順」「注意」など）、「項目：値」の行、「1.」「①」などの番号を手がかりに振り分けます。記録する前に内容を確認できます。</p>' +
+    '<div class="impopts">' +
+      '<button class="impopt" data-act="impFile"><b>ファイルを選ぶ</b><span>Word（.docx）・PDF・テキスト・Markdown・HTML</span></button>' +
+      '<div class="impopt"><b>Google ドキュメント</b><span>共有リンク（URL）を貼り付け。初回は Google のログイン画面に移動します</span>' +
+        '<div style="display:flex;gap:8px;margin-top:8px"><input id="gdocUrl" placeholder="https://docs.google.com/document/d/…" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--card-2);border-radius:9px;padding:8px 10px"><button class="btn sm pri" data-act="impGdoc">読む</button></div></div>' +
+      '<div class="impopt"><b>テキストを貼り付け</b><span>ほかのアプリでコピーした内容をそのまま</span>' +
+        '<textarea id="impPaste" rows="4" style="width:100%;margin-top:8px;border:1px solid var(--line);background:var(--card-2);border-radius:9px;padding:8px 10px" placeholder="ここに貼り付け"></textarea>' +
+        '<div style="text-align:right;margin-top:6px"><button class="btn sm pri" data-act="impPaste">読み取る</button></div></div>' +
+    '</div>' +
+    '<div class="formbtns"><span class="sp"></span><button class="btn" data-act="closeSheet">閉じる</button></div>');
+}
+function readFileKind(f){
+  var n = (f.name || '').toLowerCase();
+  if(/\.docx$/.test(n)) return 'docx';
+  if(/\.pdf$/.test(n) || f.type === 'application/pdf') return 'pdf';
+  if(/\.html?$/.test(n) || f.type === 'text/html') return 'html';
+  if(/\.(txt|md|markdown|csv)$/.test(n) || /^text\//.test(f.type)) return 'text';
+  if(/\.doc$/.test(n)) return 'doc';
+  return '';
+}
+function importFile(f){
+  var kind = readFileKind(f), imp = UI.devImp || {};
+  if(kind === 'doc'){ toast('古い Word 形式（.doc）は読めません。Word で .docx として保存し直してください'); return; }
+  if(!kind){ toast('Word（.docx）・PDF・テキスト・HTML を選んでください'); return; }
+  if(f.size > 30e6){ toast('ファイルが大きすぎます（30MB まで）'); return; }
+  toast('読み取り中…');
+  var job = kind === 'docx' ? f.arrayBuffer().then(docxBlocks)
+    : kind === 'pdf' ? f.arrayBuffer().then(pdfBlocks)
+    : f.text().then(function(t){ return kind === 'html' ? htmlBlocks(t) : textBlocks(t, /\.(md|markdown)$/i.test(f.name)); });
+  job.then(function(blocks){
+    var res = analyzeDoc(blocks, f.name);
+    importReview(imp.pid, imp.devId, res, { type: kind === 'text' ? 'text' : kind, name: f.name, size: f.size, blob: f });
+  }).catch(function(e){ console.error(e); toast('読み取れませんでした：' + (e.message || e)); });
+}
+
+/* ---------- 読み取り：形式ごとに「ブロック」の列にする ----------
+   { type:'title'|'h'|'p'|'table', level, text, list, rows } */
+function textBlocks(text, md){
+  var out = [], tbl = null;
+  text.replace(/\r\n?/g, '\n').split('\n').forEach(function(line){
+    var t = line.trim(), m;
+    if(/^\|.*\|$/.test(t)){
+      if(/^\|[\s:\-|]+\|$/.test(t)) return;
+      var cells = t.slice(1, -1).split('|').map(function(c){ return c.trim(); });
+      if(!tbl){ tbl = { type:'table', rows:[] }; out.push(tbl); }
+      tbl.rows.push(cells); return;
+    }
+    tbl = null;
+    if(!t) return;
+    if((m = t.match(/^(#{1,6})\s+(.*)$/))){ out.push({ type: m[1].length === 1 && !out.length ? 'title' : 'h', level:m[1].length, text:m[2] }); return; }
+    if((m = t.match(/^[-*+・•●○■□◆]\s*(.+)$/))){ out.push({ type:'p', text:m[1], list:true }); return; }
+    out.push({ type:'p', text:t });
+  });
+  return out;
+}
+function htmlBlocks(html){
+  var doc = new DOMParser().parseFromString(html, 'text/html'), out = [];
+  doc.querySelectorAll('script,style,noscript').forEach(function(x){ x.remove(); });
+  doc.body.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,table,pre,blockquote').forEach(function(el){
+    var tag = el.tagName.toLowerCase();
+    if(tag !== 'table' && el.closest('table')) return;
+    if(tag === 'p' && el.closest('li')) return;
+    if(tag === 'table'){
+      out.push({ type:'table', rows: Array.prototype.map.call(el.rows, function(r){ return Array.prototype.map.call(r.cells, function(c){ return c.innerText || c.textContent || ''; }); }) });
+      return;
+    }
+    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    if(!t) return;
+    if(/^h\d$/.test(tag)) out.push({ type: tag === 'h1' && !out.length ? 'title' : 'h', level:+tag[1], text:t });
+    else out.push({ type:'p', text:t, list: tag === 'li' });
+  });
+  return out;
+}
+/* .docx は ZIP。依存ライブラリなしで中の word/document.xml を取り出す */
+function unzip(buf){
+  var dv = new DataView(buf), eocd = -1;
+  for(var i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--){ if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; } }
+  if(eocd < 0) throw new Error('Word ファイルとして開けません');
+  var count = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true), files = {};
+  for(var k = 0; k < count; k++){
+    var nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    var name = new TextDecoder().decode(new Uint8Array(buf, p + 46, nlen));
+    files[name] = { method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true) };
+    p += 46 + nlen + elen + clen;
+  }
+  return {
+    text: function(name){
+      var f = files[name];
+      if(!f) return Promise.resolve('');
+      var start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+      var data = new Uint8Array(buf, start, f.size);
+      if(f.method === 0) return Promise.resolve(new TextDecoder().decode(data));
+      if(typeof DecompressionStream === 'undefined') return Promise.reject(new Error('このブラウザは Word の読み取りに対応していません（iOS 16.4 以降・最新のブラウザで開いてください）'));
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    }
+  };
+}
+function docxBlocks(buf){
+  var z = unzip(buf);
+  return Promise.all([z.text('word/document.xml'), z.text('word/styles.xml')]).then(function(r){
+    if(!r[0]) throw new Error('Word の本文が見つかりません');
+    var xml = new DOMParser().parseFromString(r[0], 'application/xml');
+    var styles = {};
+    if(r[1]){
+      var sx = new DOMParser().parseFromString(r[1], 'application/xml');
+      Array.prototype.forEach.call(sx.getElementsByTagName('w:style'), function(s){
+        var nm = s.getElementsByTagName('w:name')[0];
+        styles[s.getAttribute('w:styleId')] = nm ? nm.getAttribute('w:val') : '';
+      });
+    }
+    var kids = function(el, ln){ return Array.prototype.filter.call(el.childNodes, function(c){ return c.localName === ln; }); };
+    var ptext = function(pEl){
+      var s = '';
+      Array.prototype.forEach.call(pEl.getElementsByTagName('*'), function(n){
+        if(n.localName === 't') s += n.textContent;
+        else if(n.localName === 'tab') s += ' ';
+        else if(n.localName === 'br' || n.localName === 'cr') s += '\n';
+      });
+      return s;
+    };
+    var out = [];
+    var walk = function(node){
+      Array.prototype.forEach.call(node.childNodes, function(el){
+        var ln = el.localName;
+        if(ln === 'p'){
+          var t = ptext(el).trim();
+          if(!t) return;
+          var pPr = kids(el, 'pPr')[0], sid = '', lvl = 0, isList = false;
+          if(pPr){
+            var ps = kids(pPr, 'pStyle')[0]; if(ps) sid = ps.getAttribute('w:val') || '';
+            var ol = kids(pPr, 'outlineLvl')[0]; if(ol) lvl = +ol.getAttribute('w:val') + 1;
+            isList = kids(pPr, 'numPr').length > 0;
+          }
+          var sname = (styles[sid] || sid || '').toLowerCase(), m;
+          if(/^(title|表題)$/.test(sname)) out.push({ type:'title', text:t });
+          else if((m = sname.match(/heading\s*(\d)|見出し\s*(\d)/))) out.push({ type:'h', level: +(m[1] || m[2]), text:t });
+          else if(lvl) out.push({ type:'h', level:lvl, text:t });
+          else out.push({ type:'p', text:t, list: isList || /list/.test(sname) });
+        }else if(ln === 'tbl'){
+          out.push({ type:'table', rows: kids(el, 'tr').map(function(tr){
+            return kids(tr, 'tc').map(function(tc){ return kids(tc, 'p').map(ptext).join('\n').trim(); });
+          }) });
+        }else if(ln === 'sdt'){
+          var c = kids(el, 'sdtContent')[0]; if(c) walk(c);
+        }
+      });
+    };
+    walk(xml.getElementsByTagName('w:body')[0]);
+    return out;
+  });
+}
+/* PDF は pdf.js を、使うときだけ読み込む（日本語用の CMap も） */
+var pdfReady = null;
+function loadPdfjs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(!pdfReady) pdfReady = new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = PDFJS + 'build/pdf.min.js';
+    s.onload = function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = function(){ pdfReady = null; rej(new Error('PDF の読み取り機能を読み込めませんでした（オンラインで試してください）')); };
+    document.head.appendChild(s);
+  });
+  return pdfReady;
+}
+function pdfBlocks(buf){
+  return loadPdfjs().then(function(lib){
+    return lib.getDocument({ data:new Uint8Array(buf), cMapUrl: PDFJS + 'cmaps/', cMapPacked:true }).promise;
+  }).then(function(pdf){
+    var pages = [];
+    for(var i = 1; i <= Math.min(pdf.numPages, 60); i++) pages.push(i);
+    return Promise.all(pages.map(function(n){ return pdf.getPage(n).then(function(pg){ return pg.getTextContent(); }); }));
+  }).then(function(contents){
+    var all = [];
+    contents.forEach(function(tc){
+      var items = tc.items.filter(function(it){ return it.str && it.str.trim(); }).map(function(it){
+        return { s:it.str, x:it.transform[4], y:it.transform[5], size: Math.abs(it.transform[3]) || Math.hypot(it.transform[0], it.transform[1]) || it.height || 10, w:it.width };
+      }).sort(function(a, b){ return Math.abs(b.y - a.y) > Math.min(a.size, b.size) * 0.4 ? b.y - a.y : a.x - b.x; });
+      var cur = null;
+      items.forEach(function(it){
+        if(cur && Math.abs(cur.y - it.y) <= Math.min(cur.size, it.size) * 0.4){
+          var gap = it.x - cur.xe;
+          cur.text += (gap > cur.size * 0.6 ? ' ' : '') + it.s; cur.xe = it.x + it.w; cur.size = Math.max(cur.size, it.size);
+        }else{
+          cur = { text:it.s, y:it.y, x:it.x, xe:it.x + it.w, size:it.size, gapBefore: cur ? cur.y - it.y : 99 };
+          all.push(cur);
+        }
+      });
+    });
+    if(!all.length) throw new Error('文字が見つかりません（画像だけの PDF は読めません）');
+    var sizes = all.map(function(l){ return l.size; }).sort(function(a, b){ return a - b; }), med = sizes[Math.floor(sizes.length / 2)];
+    var out = [], NUMLIKE = /^\s*([0-9０-９]{1,2}[.．、)）]|[①-⑳]|[-・•●■□◆]|手順\s*[0-9０-９])/;
+    all.forEach(function(l, i){
+      /* 日本語 PDF は「黒」「立」が康熙部首（⿊ ⽴）で出てくることがあるので、ふつうの漢字に直す */
+      var t = l.text.replace(/[⺀-⿟豈-﫿]/g, function(c){ var n = c.normalize('NFKC'); return { '黑':'黒', '靑':'青', '黃':'黄', '齒':'歯', '齊':'斉' }[n] || n; }).replace(/\s+/g, ' ').trim();
+      if(!t) return;
+      if(i === 0 && l.size >= med * 1.3 && t.length <= 50){ out.push({ type:'title', text:t }); return; }
+      if(l.size >= med * 1.15 && t.length <= 40){ out.push({ type:'h', level: l.size >= med * 1.4 ? 1 : 2, text:t }); return; }
+      var prev = out[out.length - 1];
+      var wrapped = prev && prev.type === 'p' && !/[。．.!?！？:：]$/.test(prev.text) && !NUMLIKE.test(t) && !/^[^:：]{1,20}[:：]/.test(t) && l.gapBefore < l.size * 1.8;
+      if(wrapped) prev.text += (/[A-Za-z0-9]$/.test(prev.text) && /^[A-Za-z0-9]/.test(t) ? ' ' : '') + t;
+      else out.push({ type:'p', text:t });
+    });
+    return out;
+  });
+}
+function gdocBlocks(doc){
+  var out = [];
+  var ptxt = function(par){ return (par.elements || []).map(function(e){ return e.textRun ? e.textRun.content : ''; }).join('').replace(/\n$/, '').replace(/\u000b/g, '\n'); };
+  var walk = function(content){
+    (content || []).forEach(function(el){
+      if(el.paragraph){
+        var t = ptxt(el.paragraph).trim(), st = (el.paragraph.paragraphStyle || {}).namedStyleType || '', m;
+        if(!t) return;
+        if(st === 'TITLE') out.push({ type:'title', text:t });
+        else if((m = st.match(/^HEADING_(\d)/))) out.push({ type:'h', level:+m[1], text:t });
+        else out.push({ type:'p', text:t, list: !!el.paragraph.bullet });
+      }else if(el.table){
+        out.push({ type:'table', rows: (el.table.tableRows || []).map(function(r){
+          return (r.tableCells || []).map(function(c){ return (c.content || []).map(function(x){ return x.paragraph ? ptxt(x.paragraph) : ''; }).join('\n').trim(); });
+        }) });
+      }
+    });
+  };
+  walk(doc.body && doc.body.content);
+  return out;
+}
+
+/* ---------- 読み取り：ブロックを仕様書・手順書に振り分ける ---------- */
+var SEC_RX = [
+  ['purpose', /目的|概要|用途|背景|はじめに|ねらい|overview|purpose|introduction/i],
+  ['safety', /安全|注意|警告|危険|caution|warning|safety/i],
+  ['spec', /仕様|スペック|性能|諸元|規格|specification|\bspecs?\b/i],
+  ['parts', /部品|材料|部材|パーツ|\bbom\b|必要なもの|用意するもの|準備するもの|parts|materials|components/i],
+  ['tools', /工具|道具|使用機器|機材|\btools?\b|equipment/i],
+  ['steps', /手順|作り方|製作|組み?立て|組立|作成方法|工程|procedure|\bsteps?\b|instructions|how to|assembly/i],
+  ['notes', /備考|メモ|補足|参考|その他|トラブル|notes?\b|remarks/i]
+];
+function secOf(t){
+  for(var i = 0; i < SEC_RX.length; i++) if(SEC_RX[i][1].test(t)) return SEC_RX[i][0];
+  return '';
+}
+var NUM_RX = /^\s*(?:(?:手順|ステップ|step|工程)\s*)?(?:[(（]?([0-9０-９]{1,2})[)）.．、:：]|([①-⑳])|([0-9０-９]{1,2})\s+(?=\D))\s*(.*)$/i;
+function numMatch(t){ var m = t.match(NUM_RX); return m && m[4] !== undefined ? { rest: m[4].trim() || t.trim() } : null; }
+function stripBullet(t){ return t.replace(/^\s*[-・•●○■□◆*＊]\s*/, '').trim(); }
+function kvMatch(t){
+  if(/^https?:/i.test(t)) return null;
+  var m = t.match(/^([^:：。]{1,24})[:：]\s*(.+)$/);
+  return m ? { k:m[1].trim(), v:m[2].trim() } : null;
+}
+function splitItems(v){ return /[、,，／]/.test(v) && v.length < 200 ? v.split(/[、,，／]/).map(function(x){ return x.trim(); }).filter(Boolean) : [v]; }
+function mkStep(t){
+  t = t.trim();
+  if(t.length <= 60) return { title:t, body:'' };
+  var cut = t.indexOf('。');
+  if(cut > 0 && cut < 60) return { title:t.slice(0, cut + 1), body:t.slice(cut + 1).trim() };
+  return { title:t.slice(0, 40) + '…', body:t };
+}
+function isHead(b){
+  if(b.type === 'h' || b.type === 'title') return true;
+  if(b.type !== 'p' || b.list) return false;
+  var t = b.text.trim();
+  return t.length <= 24 && !/[。、，,.:：]$/.test(t) && !!secOf(t) && !kvMatch(t) && !numMatch(t);
+}
+function analyzeDoc(blocks, fallbackName){
+  var r = { name:'', purpose:[], specs:[], parts:[], tools:[], steps:[], safety:[], notes:[] };
+  var hasStepsHead = blocks.some(function(b){ return isHead(b) && secOf(b.text) === 'steps'; });
+  var sec = '', cur = null;
+  var add = function(t, b){
+    var m, kv;
+    if(sec === 'steps' || (!hasStepsHead && (sec === '' || sec === 'purpose') && (m = numMatch(t)))){
+      m = m || numMatch(t);
+      if(m || b.list){ cur = mkStep(m ? m.rest : stripBullet(t)); r.steps.push(cur); }
+      else if(cur) cur.body += (cur.body ? '\n' : '') + t;
+      else { cur = mkStep(t); r.steps.push(cur); }
+      return;
+    }
+    if(sec === 'parts' || sec === 'tools'){
+      /* 「使用工具：…」のように、部品の欄の中に工具（または逆）が書かれていたら振り分け直す */
+      var kv0 = kvMatch(stripBullet(t)), k0 = kv0 && secOf(kv0.k);
+      if(k0 === 'parts' || k0 === 'tools'){ splitItems(kv0.v).forEach(function(x){ (k0 === 'parts' ? r.parts : r.tools).push(x); }); return; }
+      var it = stripBullet(t), nm = numMatch(it);
+      (sec === 'parts' ? r.parts : r.tools).push(nm ? nm.rest : it);
+      return;
+    }
+    if(sec === 'safety'){ r.safety.push(stripBullet(t)); return; }
+    if(sec === 'notes'){ r.notes.push(t); return; }
+    if((kv = kvMatch(t)) && (sec === 'spec' || sec === '' || sec === 'purpose')){
+      var ks = secOf(kv.k);
+      if(/^(装置名|名称|名前|タイトル|作品名|製作物)$/.test(kv.k)){ if(!r.name) r.name = kv.v; return; }
+      if(ks === 'parts'){ splitItems(kv.v).forEach(function(x){ r.parts.push(x); }); return; }
+      if(ks === 'tools'){ splitItems(kv.v).forEach(function(x){ r.tools.push(x); }); return; }
+      if(ks === 'purpose' && sec !== 'spec'){ r.purpose.push(kv.v); return; }
+      if(ks === 'safety'){ r.safety.push(kv.v); return; }
+      r.specs.push({ k:kv.k, v:kv.v }); return;
+    }
+    if(sec === 'spec'){ r.specs.push({ k:'', v:stripBullet(t) }); return; }
+    if(sec === 'purpose' || sec === ''){ r.purpose.push(t); return; }
+    r.notes.push(t);
+  };
+  blocks.forEach(function(b){
+    if(b.type === 'table'){
+      var rows = (b.rows || []).map(function(rw){ return rw.map(function(c){ return String(c || '').replace(/\s+/g, ' ').trim(); }); }).filter(function(rw){ return rw.some(Boolean); });
+      if(!rows.length) return;
+      var head = rows[0].join(' ');
+      var body = rows.length > 1 && /項目|名称|品名|部品|材料|内容|手順|工程|数量|no\.?$|^no\b|番号|仕様/i.test(head) ? rows.slice(1) : rows;
+      if(sec === 'parts' || sec === 'tools' || /品名|部品|材料|数量|個数/.test(head)){
+        body.forEach(function(rw){ var c = rw.filter(Boolean); if(/^[0-9０-９]+$/.test(c[0]) && c.length > 1) c = c.slice(1); (sec === 'tools' ? r.tools : r.parts).push(c.join(' ／ ')); });
+      }else if(sec === 'steps' || /手順|工程/.test(head)){
+        body.forEach(function(rw){ var c = rw.filter(Boolean); if(/^[0-9０-９]+$/.test(c[0]) && c.length > 1) c = c.slice(1); if(c.length) r.steps.push({ title:c[0], body:c.slice(1).join('\n') }); });
+      }else if(rows[0].length >= 2){
+        body.forEach(function(rw){ if(rw[0] || rw[1]) r.specs.push({ k:rw[0], v:rw.slice(1).filter(Boolean).join(' ') }); });
+      }else body.forEach(function(rw){ add(rw[0], { type:'p' }); });
+      return;
+    }
+    var t = String(b.text || '').trim();
+    if(!t) return;
+    if(b.type === 'title'){ if(!r.name) r.name = t; return; }
+    if(isHead(b)){
+      var s2 = secOf(t);
+      if(s2){ sec = s2; cur = null; return; }
+      if(!r.name && b.level === 1){ r.name = t; return; }
+      if(sec === 'steps'){ cur = mkStep(t); r.steps.push(cur); }
+      return;
+    }
+    t.split('\n').forEach(function(line){ line = line.trim(); if(line) add(line, b); });
+  });
+  if(!r.name) r.name = String(fallbackName || '').replace(/\.[^.]+$/, '').replace(/[_\-]?(仕様書|手順書|製作手順|作り方)[_\-]?/g, ' ').trim() || '自作実験装置';
+  return r;
+}
+
+/* ---------- 読み取り：確認して記録 ---------- */
+function importReview(pid, devId, res, src){
+  var p = getP(pid);
+  if(!p) return;
+  var d = devId ? getDev(p, devId) : null;
+  var empty = !d || (!d.purpose && !d.specs.length && !lines(d.parts).length && !lines(d.tools).length && !d.safety && !d.notes && !d.steps.length);
+  UI.impRes = { pid:pid, devId:devId, res:res, src:src };
+  var cnt = function(label, n, list){
+    return '<div class="impcnt' + (n ? '' : ' zero') + '"><b>' + label + '</b><span class="mono">' + n + '</span>' + (list && n ? '<div class="pv">' + list.slice(0, 4).map(function(x){ return esc(x); }).join('<br>') + (n > 4 ? '<br>…' : '') + '</div>' : '') + '</div>';
+  };
+  var total = res.specs.length + res.parts.length + res.tools.length + res.steps.length + res.purpose.length + res.safety.length + res.notes.length;
+  openSheet('<h2>読み取り結果の確認</h2>' +
+    '<p class="muted small" style="margin:-8px 0 12px">' + esc(src.name || '') + (total ? '' : ' ・ 振り分けられる内容が見つかりませんでした') + '</p>' +
+    '<label class="fld"><span>装置名</span><input id="impName" value="' + esc(d && !empty ? d.name : res.name) + '"></label>' +
+    '<div class="impgrid">' +
+      cnt('目的・用途', res.purpose.length ? 1 : 0, res.purpose.length ? [res.purpose.join(' ').slice(0, 80)] : []) +
+      cnt('仕様', res.specs.length, res.specs.map(function(s){ return s.k ? s.k + '：' + s.v : s.v; })) +
+      cnt('部品・材料', res.parts.length, res.parts) +
+      cnt('工具・機器', res.tools.length, res.tools) +
+      cnt('手順', res.steps.length, res.steps.map(function(s, i){ return (i + 1) + '. ' + s.title; })) +
+      cnt('安全上の注意', res.safety.length, res.safety) +
+      cnt('備考', res.notes.length, res.notes) +
+    '</div>' +
+    (d && !empty ? '<div class="impmode"><label><input type="radio" name="impMode" value="append" checked> いまの記録に追記する</label><label><input type="radio" name="impMode" value="replace"> いまの記録を置き換える</label></div>' : '') +
+    '<p class="muted small">記録したあとも、仕様書・手順はそれぞれ編集できます。' + (src.blob ? '元のファイルは装置の「元の資料」に保存されます。' : '') + '</p>' +
+    '<div class="formbtns"><span class="sp"></span><button class="btn" data-act="closeSheet">キャンセル</button><button class="btn pri" data-act="impApply"' + (total ? '' : ' disabled') + '>この内容で記録</button></div>');
+}
+function applyImport(){
+  var x = UI.impRes; if(!x) return;
+  var p = getP(x.pid); if(!p) return;
+  if(!Array.isArray(p.devices)) p.devices = [];
+  var res = x.res, d = x.devId ? getDev(p, x.devId) : null;
+  var modeEl = document.querySelector('input[name=impMode]:checked'), mode = modeEl ? modeEl.value : 'replace';
+  var name = ($('#impName').value || '').trim() || res.name;
+  if(!d){ d = blankDevice(name); p.devices.push(d); }
+  normDevice(d);
+  var join = function(a, b){ return [a, b].filter(Boolean).join('\n'); };
+  var uniq = function(a, b){ var seen = {}; return lines(a).concat(b).filter(function(v){ var k = normName(v); if(!k || seen[k]) return false; seen[k] = 1; return true; }).join('\n'); };
+  if(mode === 'replace'){
+    d.name = name; d.purpose = res.purpose.join('\n'); d.specs = res.specs.slice(); d.parts = res.parts.join('\n'); d.tools = res.tools.join('\n');
+    d.safety = res.safety.join('\n'); d.notes = res.notes.join('\n');
+    d.steps = res.steps.map(function(s){ return { id:uid(), title:s.title, body:s.body, done:false }; });
+  }else{
+    d.name = name || d.name;
+    d.purpose = join(d.purpose, res.purpose.join('\n'));
+    var keys = {}; d.specs.forEach(function(s){ if(s.k) keys[s.k] = 1; });
+    d.specs = d.specs.concat(res.specs.filter(function(s){ return !s.k || !keys[s.k]; }));
+    d.parts = uniq(d.parts, res.parts); d.tools = uniq(d.tools, res.tools);
+    d.safety = join(d.safety, res.safety.join('\n')); d.notes = join(d.notes, res.notes.join('\n'));
+    d.steps = d.steps.concat(res.steps.map(function(s){ return { id:uid(), title:s.title, body:s.body, done:false }; }));
+  }
+  var src = x.src, entry = { id:uid(), name:src.name || '読み取った資料', type:src.type, size:src.size || 0, url:src.url || '', importedAt:todayISO() };
+  var finish = function(){
+    d.sources.push(entry);
+    touch(p); save(); closeSheet();
+    if(location.hash !== '#/p/' + p.id + '/device') location.hash = '#/p/' + p.id + '/device'; else render(true);
+    toast('「' + d.name + '」に記録しました（仕様 ' + res.specs.length + ' ・ 手順 ' + res.steps.length + '）');
+  };
+  if(src.blob){
+    entry.fileId = uid(); STORING++;
+    FILES.put(entry.fileId, src.blob).then(function(){ askPersist(); }).catch(function(){ delete entry.fileId; toast('元のファイルは保存できませんでした（内容は記録します）'); })
+      .then(function(){ setTimeout(function(){ STORING = Math.max(0, STORING - 1); }, 15000); finish(); });
+  }else finish();
+}
+
+/* ---------- Google ドキュメント（Docs API。初回だけ Google のログイン画面へ） ---------- */
+function docsTokenOK(){ return !!(SM.docsToken && SM.docsExp && Date.now() < SM.docsExp); }
+function importGdoc(pid, devId, url){
+  var m = String(url || '').match(/\/document\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]{20,})/) || String(url || '').match(/^([A-Za-z0-9_-]{25,})$/);
+  if(!m){ toast('Google ドキュメントの URL を貼り付けてください'); return; }
+  if(!clientId()){ toast('Google の設定がありません'); return; }
+  if(!docsTokenOK()){
+    if(!confirm('Google ドキュメントを読むため、Google のログイン画面に移動します。読み取りの許可（閲覧のみ）を求められたら許可してください。')) return;
+    login(false, { scope: DOCS_SCOPE + (SM.signedIn ? ' https://www.googleapis.com/auth/drive.appdata' : ''), purpose:'docs', pending:{ pid:pid, devId:devId || '', url:url } });
+    return;
+  }
+  toast('Google ドキュメントを読み取り中…');
+  fetch('https://docs.googleapis.com/v1/documents/' + m[1], { headers:{ Authorization:'Bearer ' + SM.docsToken } }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if(r.ok) return j;
+      var msg = (j.error && j.error.message) || '';
+      if(r.status === 401){ SM.docsToken = ''; SM.docsExp = 0; saveSM(); throw new Error('ログインの期限が切れました。もう一度「読む」を押してください'); }
+      if(r.status === 403 && /has not been used|disabled|SERVICE_DISABLED/i.test(msg + JSON.stringify(j))) throw new Error('Google Cloud で「Google Docs API」が有効になっていません。README の手順で有効にしてください');
+      if(r.status === 403 || r.status === 404) throw new Error('ドキュメントが見つからないか、このアカウントに閲覧権限がありません');
+      if(r.status === 400) throw new Error('Google ドキュメント形式ではありません（Word のまま Drive に置かれたファイルは、ダウンロードして .docx で読み込んでください）');
+      throw new Error('Google ドキュメント ' + r.status + ' ' + msg);
+    });
+  }).then(function(doc){
+    var res = analyzeDoc(gdocBlocks(doc), doc.title);
+    importReview(pid, devId, res, { type:'gdoc', name: doc.title || 'Google ドキュメント', url: 'https://docs.google.com/document/d/' + m[1] + '/edit' });
+  }).catch(function(e){ alert(e.message || String(e)); });
 }
 
 function topbar(html){ $('#topbar').innerHTML = html; }
@@ -2166,16 +2820,16 @@ function viewProject(p, tab){
   topbar('<a class="iconbtn" href="#/" aria-label="戻る">' + I.back + '</a><h1>' + esc(p.title) + '</h1>' +
     '<button class="iconbtn" data-act="projEdit" aria-label="編集">' + I.edit + '</button>');
   var pr = projProgress(p);
-  var cnt = { design:DB.designs.filter(function(d){ return d.projectId === p.id; }).length, refs:p.refs.length + p.datasets.length, cost:p.expenses.length + p.uses.length, progress:p.logs.length, plan:p.milestones.length };
+  var cnt = { device:(p.devices || []).length, design:DB.designs.filter(function(d){ return d.projectId === p.id; }).length, refs:p.refs.length + p.datasets.length, cost:p.expenses.length + p.uses.length, progress:p.logs.length, plan:p.milestones.length };
   var h = '<div class="card phead"><div class="st"><span class="pill st-' + esc(p.status) + '">' + esc(p.status) + '</span>' +
     (p.startDate || p.targetDate ? '<span class="mono small muted">' + (p.startDate ? fmtDate(p.startDate) : '') + ' → ' + (p.targetDate ? fmtDate(p.targetDate) : '未定') + '</span>' : '') +
     (p.targetDate && p.status !== '完了' ? (function(){ var n = daysUntil(p.targetDate); return '<span class="pill plain ' + (n < 0 ? 'bad' : n <= 14 ? 'warn' : '') + '">' + (n < 0 ? (-n) + '日超過' : '締切まで' + n + '日') + '</span>'; })() : '') +
     '</div><h2>' + esc(p.title) + '</h2>' +
     '<div class="pr"><div class="bar' + (pr >= 100 ? ' done' : '') + '"><i style="width:' + pr + '%"></i></div><span class="n">' + pr + '%</span></div></div>' +
-    '<div class="seg" role="tablist">' + PTABS.map(function(t){
+    '<div class="seg" role="tablist">' + ptabsOf(p).map(function(t){
       return '<a role="tab" href="#/p/' + p.id + '/' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + (cnt[t[0]] ? '<b>' + cnt[t[0]] + '</b>' : '') + '</a>';
     }).join('') + '</div>';
-  var body = { overview:tabOverview, refs:tabRefs, design:tabDesign, cost:tabCost, progress:tabProgress, plan:tabPlan }[tab] || tabOverview;
+  var body = { overview:tabOverview, device:tabDevice, refs:tabRefs, design:tabDesign, cost:tabCost, progress:tabProgress, plan:tabPlan }[tab] || tabOverview;
   return h + body(p);
 }
 
@@ -2185,6 +2839,13 @@ function tabOverview(p){
     '<div class="card"><dl class="dl" style="margin:0">' + dd('概要', p.summary) + dd('研究課題・目的', p.question) + dd('方法・アプローチ', p.method) + dd('成果物・発表先', p.outcome) +
     '<div><dt>タグ</dt><dd>' + (p.tags.length ? '<div class="tags">' + p.tags.map(function(t){ return '<span class="tag">#' + esc(t) + '</span>'; }).join('') + '</div>' : '<span class="faint">なし</span>') + '</dd></div>' +
     '</dl></div>';
+  if(p.needsDevice){
+    h += '<div class="sec"><h2>自作実験装置</h2><span class="sp"></span><a class="lnk" href="#/p/' + p.id + '/device">装置タブへ</a></div>';
+    h += p.devices.length ? '<div class="card rows">' + p.devices.map(function(d){
+      var n = d.steps.length, dn = d.steps.filter(function(x){ return x.done; }).length;
+      return '<a class="row" href="#/p/' + p.id + '/device" style="color:inherit"><div class="main"><div class="t">' + esc(d.name) + '</div><div class="s">仕様 ' + d.specs.length + ' 項目 ・ 部品 ' + lines(d.parts).length + ' ・ 手順 ' + dn + '/' + n + '</div></div></a>';
+    }).join('') + '</div>' : '<div class="card empty" style="padding:18px">まだ装置が登録されていません。<div class="btnrow"><a class="btn sm pri" href="#/p/' + p.id + '/device">装置を登録する</a></div></div>';
+  }
   var nx = nextMilestone(p);
   var lastLog = p.logs.slice().sort(function(a, b){ return (b.date || '') > (a.date || '') ? 1 : -1; })[0];
   h += '<div class="sec"><h2>ひと目で</h2></div><div class="stats">' +
@@ -2644,6 +3305,47 @@ var ACT = {
   invEdit: function(el){ invForm(getInv(el.dataset.id)); },
   invCat: function(el){ UI.invCat = el.dataset.v; render(true); },
   invView: function(el){ UI.invView = el.dataset.v; render(true); },
+  devNew: function(){ deviceForm(UI.cur, null); },
+  devEdit: function(el){ deviceForm(UI.cur, getDev(UI.cur, el.dataset.dev)); },
+  devImport: function(el){ importSheet(UI.cur, el.dataset.dev || ''); },
+  devCopy: function(el){ var d = getDev(UI.cur, el.dataset.dev); if(d) copyText(deviceText(d), '仕様書・手順書をコピーしました'); },
+  impFile: function(){ $('#devFile').click(); },
+  impPaste: function(){
+    var t = ($('#impPaste').value || '').trim();
+    if(!t){ $('#impPaste').focus(); return; }
+    var imp = UI.devImp || {};
+    importReview(imp.pid, imp.devId, analyzeDoc(textBlocks(t, /^#\s/m.test(t)), '貼り付けたテキスト'), { type:'paste', name:'貼り付けたテキスト' });
+  },
+  impGdoc: function(){ var imp = UI.devImp || {}; importGdoc(imp.pid, imp.devId, ($('#gdocUrl').value || '').trim()); },
+  impApply: function(){ applyImport(); },
+  stepNew: function(el){ var d = getDev(UI.cur, el.dataset.dev); if(d) stepForm(UI.cur, d, null); },
+  stepEdit: function(el){ var d = getDev(UI.cur, el.dataset.dev), st = d && d.steps.find(function(x){ return x.id === el.dataset.step; }); if(st) stepForm(UI.cur, d, st); },
+  stepToggle: function(el){
+    var p = UI.cur, d = getDev(p, el.dataset.dev), st = d && d.steps.find(function(x){ return x.id === el.dataset.step; });
+    if(!st) return;
+    st.done = !st.done; touch(p); save(); render(true);
+  },
+  stepMove: function(el){
+    var p = UI.cur, d = getDev(p, el.dataset.dev);
+    if(!d) return;
+    var i = d.steps.findIndex(function(x){ return x.id === el.dataset.step; }), j = i + (+el.dataset.d);
+    if(i < 0 || j < 0 || j >= d.steps.length) return;
+    var t = d.steps[i]; d.steps[i] = d.steps[j]; d.steps[j] = t;
+    touch(p); save(); render(true);
+  },
+  srcOpen: function(el){
+    var d = getDev(UI.cur, el.dataset.dev), x = d && d.sources.find(function(y){ return y.id === el.dataset.src; });
+    if(!x) return;
+    if(x.url && !x.fileId){ window.open(x.url, '_blank', 'noopener'); return; }
+    fileURL(x.fileId).then(function(u){ if(u) window.open(u, '_blank'); else toast('ファイルがこの端末にありません（同期の完了を待ってください）'); });
+  },
+  srcDel: function(el){
+    var p = UI.cur, d = getDev(p, el.dataset.dev), x = d && d.sources.find(function(y){ return y.id === el.dataset.src; });
+    if(!x || !confirm('「' + x.name + '」を元の資料から外しますか？（記録した仕様書・手順書はそのまま残ります）')) return;
+    if(x.fileId) dropFile({ id:x.fileId });
+    d.sources = d.sources.filter(function(y){ return y !== x; });
+    touch(p); save(); render(true);
+  },
   linkOpen: function(el){
     var list = el.dataset.scope === 'all' ? allUnlinked() : unlinkedExp(UI.cur).map(function(e){ return { p:UI.cur, e:e }; });
     if(list.length) linkSheet(list);
@@ -2842,6 +3544,22 @@ function addSample(){
     question:'在室人数や窓の開け方によって、CO₂ 濃度が 1000ppm を超えるまでの時間はどれくらい変わるか。',
     method:'1分間隔で CO₂・温度・湿度を記録し、Wi-Fi 経由でスプレッドシートに送る。窓の開閉と在室人数は手動でメモ。条件ごとに上昇速度を比較する。',
     outcome:'学校の自由研究発表、GitHub にコードを公開',
+    needsDevice:true,
+    devices:[{ id:uid(), name:'CO₂ ロガー 試作1号', purpose:'部屋の CO₂ 濃度・温度・湿度を 1 分ごとに記録し、1000ppm を超えたら画面で知らせる。',
+      specs:[ { k:'測定項目', v:'CO₂ 濃度・温度・湿度・気圧' }, { k:'測定範囲（CO₂）', v:'400〜5000ppm' }, { k:'記録間隔', v:'1 分' },
+              { k:'電源', v:'USB 5V（モバイルバッテリー可）' }, { k:'通信', v:'Wi-Fi（スプレッドシートへ HTTPS 送信）' }, { k:'外形', v:'約 120×80×40mm（アクリルケース）' } ],
+      parts:'ESP32-DevKitC ×1\nCO₂センサーモジュール SCD41 ×1\n温湿度・気圧センサー BME280 ×1\nOLED ディスプレイ 0.96インチ ×1\nブレッドボード ×1\nジャンパーワイヤ',
+      tools:'はんだごて\nデジタルマルチメーター\nニッパー',
+      safety:'SCD41 は通気口の近くに置き、ESP32 の発熱から 3cm 以上離す。\nはんだ付けは換気しながら行う。',
+      notes:'I2C アドレス：SCD41 0x62 / BME280 0x76 / OLED 0x3C',
+      steps:[
+        { id:uid(), title:'ブレッドボードに ESP32 と 3 つのモジュールを置く', body:'', done:true },
+        { id:uid(), title:'I2C（SDA=GPIO21, SCL=GPIO22）と 3.3V・GND を配線する', body:'3 つのモジュールは同じバスに並べてつなぐ。', done:true },
+        { id:uid(), title:'テスターで 3.3V と GND の短絡がないか確認する', body:'', done:true },
+        { id:uid(), title:'計測スケッチを書き込み、シリアルモニタで値を確認する', body:'起動直後の CO₂ 値は数分で落ち着く。', done:false },
+        { id:uid(), title:'スプレッドシートへの送信を設定する', body:'', done:false },
+        { id:uid(), title:'ケースに収め、通気口を開ける', body:'', done:false }
+      ], sources:[] }],
     refs:[
       { id:uid(), title:'Is CO2 an Indoor Pollutant? Direct Effects of Low-to-Moderate CO2 Concentrations on Human Decision-Making Performance', authors:'Usha Satish, Mark J. Mendell, Krishnamurthy Shekhar, Toshifumi Hotchi, Douglas Sullivan, Siegfried Streufert, William J. Fisk', year:'2012', venue:'Environmental Health Perspectives', doi:'10.1289/ehp.1104789', status:'読んだ', note:'1000ppm 程度でも意思決定テストの成績が下がったという報告。しきい値を 1000ppm にする根拠に使う。' },
       { id:uid(), title:'（サンプル）SCD41 データシート', authors:'Sensirion', year:'', venue:'メーカー資料', status:'精読済み', note:'自動自己校正（ASC）の仕組みと、屋外空気に触れさせる必要がある点を確認。' }
@@ -2889,7 +3607,7 @@ function addSample(){
     summary:'フォトリフレクタ 4 個でラインを読み、P・PI・PID 制御でコースの周回タイムとはみ出し回数を比べる。',
     question:'ゲインの組み合わせによって、速さと安定性はどのようにトレードオフになるか。',
     method:'', outcome:'',
-    refs:[], datasets:[], expenses:[], uses:[], logs:[],
+    refs:[], datasets:[], expenses:[], uses:[], logs:[], devices:[],
     milestones:[
       { id:uid(), title:'シャーシとモーター周りを組む', due:addDays(14), done:false },
       { id:uid(), title:'テストコースを作る', due:addDays(21), done:false },
@@ -2950,6 +3668,10 @@ applyTheme();
 render(false);
 if(SYNC.flash) toast(SYNC.flash);
 syncStartup();
+if(SYNC.resumeDocs){
+  var rd = SYNC.resumeDocs; SYNC.resumeDocs = null;
+  setTimeout(function(){ importGdoc(rd.pid, rd.devId, rd.url); }, 400);
+}
 if('serviceWorker' in navigator && location.protocol === 'https:'){
   navigator.serviceWorker.register('sw.js').catch(function(){});
 }
