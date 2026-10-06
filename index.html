@@ -375,6 +375,7 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .qty .n.used{color:var(--muted);min-width:56px}
 .usedtag{color:var(--muted)}
 .inusetag{color:var(--blue)}
+.makertag{color:var(--acc-ink)}
 .qty .n.inuse{color:var(--blue);min-width:56px}
 .usebtn.tool.on{background:var(--blue-soft);color:var(--blue)}
 .userow{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-top:1px solid var(--line-soft);min-height:56px}
@@ -1215,7 +1216,47 @@ function usedQty(it){
   if(isTool(it)) return 0;
   var n = 0;
   DB.projects.forEach(function(p){ p.uses.forEach(function(u){ if(u.invId === it.id) n += useN(u); }); });
+  return n + makerInstalled(it.id);
+}
+
+/* ---- 自作デスク（maker-desk）とのつながり ----
+   自作デスクの作品の部品表は、この台帳の部品を invId で指している。
+   ・同じブラウザなら自作デスクのデータ（localStorage）をそのまま読む
+   ・同期していれば、同じアプリ専用領域の maker-desk.json を読んで写しを持つ
+   読むだけで書き換えない。作品で「取り付け済み」にした部品は使用済みとして数える。 */
+var MAKER_KEY = 'maker-desk-v1', MAKER_CACHE = 'lab-desk-maker', MAKER_URL = '../maker-desk/';
+var MAKER = null;
+function makerStamp(d){
+  var m = +d.savedAt || 0;
+  (d.builds || []).forEach(function(b){ if(+b._u > m) m = +b._u; (b.bom || []).forEach(function(x){ if(+x._u > m) m = +x._u; }); });
+  return m;
+}
+function slimMaker(d){
+  return { builds:(d.builds || []).map(function(b){ return { id:b.id, title:b.title, kind:b.kind, status:b.status, _u:b._u, bom:(b.bom || []).filter(function(x){ return x.invId; }).map(function(x){ return { id:x.id, invId:x.invId, qty:x.qty, unit:x.unit, state:x.state, role:x.role, _u:x._u }; }) }; }) };
+}
+function loadMaker(){
+  var c = [];
+  try{ var d = JSON.parse(localStorage.getItem(MAKER_KEY)); if(d && Array.isArray(d.builds)) c.push({ db:slimMaker(d), at:makerStamp(d), src:'local' }); }catch(e){}
+  try{ var k = JSON.parse(localStorage.getItem(MAKER_CACHE)); if(k && k.db && Array.isArray(k.db.builds)) c.push({ db:k.db, at:makerStamp(k.db), src:'drive' }); }catch(e){}
+  c.sort(function(a, b){ return b.at - a.at; });
+  MAKER = c[0] || null;
+}
+function makerUsesOf(invId){
+  var out = [];
+  if(MAKER) MAKER.db.builds.forEach(function(b){ b.bom.forEach(function(x){ if(x.invId === invId) out.push({ b:b, x:x }); }); });
+  return out;
+}
+function makerInstalled(invId){
+  var n = 0;
+  makerUsesOf(invId).forEach(function(y){ if(y.x.role !== 'tool' && y.x.state === '取り付け済み') n += Math.max(1, +y.x.qty || 1); });
   return n;
+}
+function makerUsesHTML(it){
+  var mk = makerUsesOf(it.id);
+  if(!mk.length) return '';
+  return '<div class="infobox"><b>自作デスクで使っている作品（' + mk.length + '）</b>' + mk.map(function(y){
+    return '<div><a href="' + MAKER_URL + '#/b/' + encodeURIComponent(y.b.id) + '/parts" target="_blank" rel="noopener">' + esc(y.b.title) + ' ↗</a> <span class="muted mono small">× ' + esc(y.x.qty || 1) + ' ・ ' + esc(y.x.state || '') + '</span></div>';
+  }).join('') + '</div>';
 }
 function inUseQty(it){
   if(!isTool(it)) return 0;
@@ -1278,7 +1319,7 @@ function invForm(it, preset, after){
     },
     bottom: (isNew ? '' : purchaseHistoryHTML(it)) + (us.length ? '<div class="infobox"><b>' + (isTool(it) ? '空き ' + num(unusedQty(it)) + ' ・ 使用中 ' + num(inUseQty(it)) : '未使用 ' + num(unusedQty(it)) + ' ・ 使用済み ' + num(usedQty(it))) + '（' + esc(it.unit || '個') + '）</b>' + us.map(function(x){
       return '<div><a href="#/p/' + x.p.id + '/cost" data-act="closeSheet">' + esc(x.p.title) + '</a> <span class="muted mono small">× ' + esc(x.u.qty || 1) + ' ・ ' + (useN(x.u) ? useState(x.p, x.u, it) : '使う予定') + '</span></div>';
-    }).join('') + '</div>' : ''),
+    }).join('') + '</div>' : '') + (it ? makerUsesHTML(it) : ''),
     onSave: function(v){
       var item;
       if(isNew){
@@ -1308,7 +1349,8 @@ function invForm(it, preset, after){
       });
       save(); render(true);
     },
-    delConfirm: us.length ? 'この部品は ' + us.length + ' 件の研究で備品として使われています。削除すると備品一覧からも外れます。削除しますか？' : '削除しますか？'
+    delConfirm: (us.length ? 'この部品は ' + us.length + ' 件の研究で備品として使われています。削除すると備品一覧からも外れます。' : '') +
+      (it && makerUsesOf(it.id).length ? '自作デスクの ' + makerUsesOf(it.id).length + ' 件の作品の部品表からも参照されています（作品側には品名が残ります）。' : '') + '削除しますか？'
   });
 }
 
@@ -2032,6 +2074,7 @@ function syncNow(interactive){
   SYNC.running = true; setSyncState('syncing');
   var changedView = false;
   return driveList().then(function(files){
+    pullMaker(files);
     var jsons = files.filter(function(x){ return x.name === 'lab-desk.json'; });
     var remote = null, remoteStr = '';
     return jsons.reduce(function(pr, fl){
@@ -2077,6 +2120,18 @@ function syncNow(interactive){
     if(SYNC.again){ SYNC.again = false; syncSoon(500); }
   });
 }
+/* 自作デスクの同期ファイル（maker-desk.json）を読んで写しを持つ。読むだけで、失敗しても同期は続ける */
+function pullMaker(files){
+  var mf = files.filter(function(x){ return x.name === 'maker-desk.json'; })[0];
+  if(!mf) return;
+  driveGet(mf.id).then(function(r){ return r.json(); }).then(function(d){
+    if(!d || !Array.isArray(d.builds)) return;
+    var before = MAKER ? MAKER.at : 0;
+    try{ localStorage.setItem(MAKER_CACHE, JSON.stringify({ db:slimMaker(d), got:Date.now() })); }catch(e){}
+    loadMaker();
+    if(MAKER && MAKER.at !== before && !uiBusy()) render(true);
+  }).catch(function(){});
+}
 /* 画像：無いほうへ送る。どの設計図からも使われなくなったものは片づける */
 function syncFiles(files){
   var remote = {};
@@ -2121,11 +2176,14 @@ function syncStartup(){
   }else setSyncState('login');
 }
 document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible'){ var mb = MAKER ? MAKER.at : 0; loadMaker(); if((MAKER ? MAKER.at : 0) !== mb && !uiBusy()) render(true); }
   if(!SM.signedIn) return;
   if(document.visibilityState === 'visible') syncSoon(300);
   else if(tokenOK() && !SYNC.running) syncNow(false);
 });
 window.addEventListener('online', function(){ syncSoon(500); });
+/* 同じブラウザの別タブで自作デスクを編集したら、すぐ反映する */
+window.addEventListener('storage', function(e){ if(e.key === MAKER_KEY){ loadMaker(); if(!uiBusy()) render(true); } });
 
 function syncSettingsHTML(){
   var cid = clientId();
@@ -3419,12 +3477,14 @@ function invListHTML(){
       var short = function(t){ return esc(t.length > 18 ? t.slice(0, 18) + '…' : t); };
       var line;
       if(UI.invView === '使用済み'){
-        line = usedIn.map(function(x){ return short(x.p.title) + ' ×' + useN(x.u) + (x.u.usedDate ? '（' + fmtShort(x.u.usedDate) + '）' : ''); }).join(' ・ ');
+        line = usedIn.map(function(x){ return short(x.p.title) + ' ×' + useN(x.u) + (x.u.usedDate ? '（' + fmtShort(x.u.usedDate) + '）' : ''); })
+          .concat(makerUsesOf(i.id).filter(function(y){ return y.x.role !== 'tool' && y.x.state === '取り付け済み'; }).map(function(y){ return '自作：' + short(y.b.title) + ' ×' + Math.max(1, +y.x.qty || 1); })).join(' ・ ');
       }else if(UI.invView === '使用中'){
         line = inUseIn.map(function(x){ return short(x.p.title) + ' ×' + useN(x.u) + (x.u.usedDate ? '（' + fmtShort(x.u.usedDate) + '〜）' : ''); }).join(' ・ ') + (i.location ? ' ・ ' + esc(i.location) : '');
       }else{
         line = [i.location ? esc(i.location) : '', i.price ? yen(i.price) + '/' + unit + (+i.qty > 1 ? '（計 ' + yen(i.price * i.qty) + '）' : '') : '',
           planned.length ? '研究' + planned.length + '件で使う予定' : '',
+          makerUsesOf(i.id).length ? '<span class="makertag">自作' + makerUsesOf(i.id).length + '件</span>' : '',
           UI.invView === 'すべて' && used ? '<span class="usedtag">使用済み ' + num(used) + unit + '</span>' : '',
           UI.invView === 'すべて' && inUse ? '<span class="inusetag">使用中 ' + num(inUse) + unit + '</span>' : '',
           low ? '<span style="color:var(--bad)">補充したい</span>' : ''].filter(Boolean).join(' ・ ');
@@ -3509,6 +3569,12 @@ function render(keepScroll){
   hydrate($('#view'));
   var segOn = $('.seg a.on');
   if(segOn){ var sg = segOn.parentNode; sg.scrollLeft = segOn.offsetLeft - (sg.clientWidth - segOn.offsetWidth) / 2; }
+  if(v === 'inv' && parts[1]){
+    var oit = getInv(decodeURIComponent(parts[1]));
+    history.replaceState(null, '', '#/inv');
+    parts = ['inv'];
+    if(oit) setTimeout(function(){ invForm(oit); }, 50);
+  }
   if(v === 'inv'){
     $('#invQ').addEventListener('input', function(e){ UI.invQuery = e.target.value; $('#invList').innerHTML = invListHTML(); });
   }
@@ -3731,10 +3797,10 @@ var ACT = {
     download('lab-desk-expenses-' + todayISO() + '.csv', csv(rows), 'text/csv');
   },
   invCsv: function(){
-    var rows = [['名前','分類','型番・規格','総数','未使用・空き','使用中','使用済み','単位','補充ライン','保管場所','単価','購入日','購入先','URL','タグ','メモ','使っている研究']];
+    var rows = [['名前','分類','型番・規格','総数','未使用・空き','使用中','使用済み','単位','補充ライン','保管場所','単価','購入日','購入先','URL','タグ','メモ','使っている研究','使っている自作']];
     DB.inventory.forEach(function(i){
       rows.push([i.name, i.category, i.model, i.qty, unusedQty(i), inUseQty(i), usedQty(i), i.unit, i.minQty, i.location, i.price, i.purchased, i.shop, i.url, (i.tags || []).join(' '), i.note,
-        usesOf(i.id).map(function(x){ return x.p.title; }).join(' / ')]);
+        usesOf(i.id).map(function(x){ return x.p.title; }).join(' / '), makerUsesOf(i.id).map(function(y){ return y.b.title; }).join(' / ')]);
     });
     if(rows.length === 1) return toast('台帳がまだ空です');
     download('lab-desk-parts-' + todayISO() + '.csv', csv(rows), 'text/csv');
@@ -3984,6 +4050,7 @@ function sampleDesign(p1){
    起動
    ============================================================ */
 takeOAuthReturn();
+loadMaker();
 rebuildShadow();
 applyTheme();
 render(false);

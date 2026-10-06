@@ -1,6 +1,6 @@
 /* 研究デスク — オフライン用サービスワーカー
    HTML はネットワーク優先（更新をすぐ反映）、それ以外はキャッシュ優先。 */
-var CACHE = 'lab-desk-v14';
+var CACHE = 'lab-desk-v15';
 var ASSETS = [
   './',
   './index.html',
